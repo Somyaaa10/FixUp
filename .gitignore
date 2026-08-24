@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production build outputs
+dist/
+**/dist/
+dist-ssr/
+
+# Environment Variables & Secrets (IMPORTANT)
+.env
+.env.local
+.env.*.local
+**/server/.env
+**/.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS & Editor Files
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
