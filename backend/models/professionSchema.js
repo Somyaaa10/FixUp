@@ -41,4 +41,4 @@ const professionSchema = new mongoose.Schema({
   appointments: [{ type: mongoose.Types.ObjectId, ref: "Appointment" }],
 });
 
-export default mongoose.model("Profession", professionSchema);
+export default mongoose.models.Profession || mongoose.model("Profession", professionSchema);

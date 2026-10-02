@@ -1,5 +1,5 @@
 import User from "../models/UserSchema.js";
-import Profession from "../models/ProfessionSchema.js";
+import Profession from "../models/professionSchema.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
