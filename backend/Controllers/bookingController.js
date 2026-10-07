@@ -1,3 +1,4 @@
+
 import User from "../models/UserSchema.js";
 import Profession from "../models/professionSchema.js";
 import Booking from "../models/BookingSchema.js";
@@ -6,26 +7,40 @@ import crypto from "crypto";
 
 export const createRazorpayOrder = async (req, res) => {
   try {
-    const professional = await Profession.findById(req.params.professionalId);
+    const professional = await Profession.findById(
+      req.params.professionalId
+    );
+
     const user = await User.findById(req.userId);
 
     if (!professional) {
-      return res.status(404).json({ success: false, message: "Professional not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Professional not found",
+      });
     }
 
-    const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_mock_key";
-    const key_secret = process.env.RAZORPAY_KEY_SECRET || "mock_secret";
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: "Razorpay is not configured",
+      });
+    }
 
-    const instance = new Razorpay({ key_id, key_secret });
+    const instance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
 
-    // Ticket price converted to paise (INR) e.g., ₹500 = 50000 paise
+    // Ticket price converted to paise
+    // Example: ₹500 = 50000 paise
     const ticketPrice = professional.ticketPrice || 500;
     const amount = ticketPrice * 100;
 
     const options = {
       amount,
       currency: "INR",
-      receipt: `receipt_${Date.now()}`,
+      receipt: `receipt_${Date.now()} `,
     };
 
     const order = await instance.orders.create(options);
@@ -33,7 +48,7 @@ export const createRazorpayOrder = async (req, res) => {
     res.status(200).json({
       success: true,
       order,
-      key: key_id,
+      key: process.env.RAZORPAY_KEY_ID,
       professional: {
         id: professional._id,
         name: professional.name,
@@ -46,7 +61,11 @@ export const createRazorpayOrder = async (req, res) => {
     });
   } catch (err) {
     console.error("Razorpay Order Error:", err);
-    res.status(500).json({ success: false, message: err.message || "Failed to create Razorpay order" });
+
+    res.status(500).json({
+      success: false,
+      message: err.message || "Failed to create Razorpay order",
+    });
   }
 };
 
@@ -60,26 +79,56 @@ export const verifyRazorpayPayment = async (req, res) => {
       ticketPrice,
     } = req.body;
 
-    const key_secret = process.env.RAZORPAY_KEY_SECRET || "mock_secret";
-
-    // Verify HMAC SHA256 Signature
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", key_secret)
-      .update(body.toString())
-      .digest("hex");
-
-    const isAuthentic = expectedSignature === razorpay_signature || razorpay_signature === "mock_signature";
-
-    if (!isAuthentic) {
-      return res.status(400).json({ success: false, message: "Payment verification failed (Invalid signature)" });
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !professionalId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required payment information",
+      });
     }
 
-    // Save booking to database
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: "Razorpay is not configured",
+      });
+    }
+
+    // Verify Razorpay HMAC SHA256 signature
+    const body = `${razorpay_order_id}| ${razorpay_payment_id} `;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest("hex");
+
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (!isAuthentic) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed (Invalid signature)",
+      });
+    }
+
+    const professional = await Profession.findById(professionalId);
+
+    if (!professional) {
+      return res.status(404).json({
+        success: false,
+        message: "Professional not found",
+      });
+    }
+
+    // Save booking after successful payment verification
     const booking = new Booking({
-      doctor: professionalId,
+      professional: professionalId,
       user: req.userId,
-      ticketPrice: ticketPrice || "500",
+      ticketPrice: ticketPrice || String(professional.ticketPrice || 500),
       appointmentDate: new Date(),
       status: "approved",
       isPaid: true,
@@ -94,6 +143,10 @@ export const verifyRazorpayPayment = async (req, res) => {
     });
   } catch (err) {
     console.error("Razorpay Verification Error:", err);
-    res.status(500).json({ success: false, message: err.message || "Error verifying payment" });
+
+    res.status(500).json({
+      success: false,
+      message: err.message || "Error verifying payment",
+    });
   }
 };

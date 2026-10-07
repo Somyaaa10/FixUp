@@ -63,15 +63,15 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password, role } = req.body; // Added role here
+  const { email, password, role } = req.body;
   try {
-    if (!["customer", "professional"].includes(role)) {
+    if (!["customer", "professional", "admin"].includes(role)) {
       return res.status(400).json({ message: "A valid role is required" });
     }
 
     let user = null;
 
-    if (role === "customer") {
+    if (role === "customer" || role === "admin") {
       user = await User.findOne({ email });
     } else if (role === "professional") {
       user = await Profession.findOne({ email });

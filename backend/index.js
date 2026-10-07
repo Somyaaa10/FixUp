@@ -8,6 +8,10 @@ import userRoute from "./routes/user.js";
 import professionalRoute from "./routes/professional.js";
 import reviewRoute from "./routes/review.js";
 import bookingRoute from "./routes/booking.js";
+import serviceRoute from "./routes/serviceRoutes.js";
+import adminRoute from "./routes/adminRoutes.js";
+import { seedServicesIfEmpty } from "./Controllers/serviceController.js";
+import { seedAdminIfMissing } from "./scripts/createAdmin.js";
 
 dotenv.config();
 
@@ -29,6 +33,8 @@ const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URL || "mongodb://127.0.0.1:27017/fixup");
     console.log("MongoDB is connected");
+    await seedServicesIfEmpty();
+    await seedAdminIfMissing();
   } catch (error) {
     console.error("MongoDB connection error:", error.message);
   }
@@ -45,6 +51,8 @@ app.use("/api/v1/users", userRoute);
 app.use("/api/v1/professionals", professionalRoute);
 app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/bookings", bookingRoute);
+app.use("/api/v1/services", serviceRoute);
+app.use("/api/v1/admin", adminRoute);
 
 // Start server
 const startServer = async () => {

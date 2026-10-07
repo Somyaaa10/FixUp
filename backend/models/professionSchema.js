@@ -38,7 +38,11 @@ const professionSchema = new mongoose.Schema({
     enum: ["pending", "approved", "cancelled"],
     default: "pending",
   },
-  appointments: [{ type: mongoose.Types.ObjectId, ref: "Appointment" }],
-});
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  appointments: [{ type: mongoose.Types.ObjectId, ref: "Booking" }],
+}, { timestamps: true });
 
 export default mongoose.models.Profession || mongoose.model("Profession", professionSchema);

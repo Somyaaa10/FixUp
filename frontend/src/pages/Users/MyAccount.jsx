@@ -12,14 +12,14 @@ const MyAccount = () => {
     data: userData,
     loading: userLoading,
     error: userError,
-  } = useFetchData(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/users/profile/me`);
+  } = useFetchData(`${import.meta.env.VITE_API_URL || "http://localhost:8001"}/api/v1/users/profile/me`);
 
   const {
     data: appointments,
     loading: appointmentsLoading,
     error: appointmentsError,
   } = useFetchData(
-    `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/users/appointments/my-appointments`
+    `${import.meta.env.VITE_API_URL || "http://localhost:8001"}/api/v1/users/appointments/my-appointments`
   );
 
   const handleLogout = () => {
@@ -97,9 +97,81 @@ const MyAccount = () => {
 
                 {!appointmentsLoading && appointments && appointments.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
-                    {appointments.map((prof) => (
-                      <ProfessionalCard key={prof._id} professional={prof} />
-                    ))}
+                    {appointments.map((item, index) => {
+                      // Support both new combined response and direct professional document
+                      const prof = item.professional || (item._id ? item : null);
+                      const bookingId = item.bookingId || item._id;
+
+                      return (
+                        <div key={bookingId || index} className="border border-solid border-[#0066ff34] p-4 lg:p-5 rounded-lg shadow-sm bg-white hover:shadow-md transition flex flex-col justify-between">
+                          {prof ? (
+                            <ProfessionalCard professional={prof} />
+                          ) : (
+                            <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md text-sm font-semibold mb-3">
+                              Professional details are currently unavailable.
+                            </div>
+                          )}
+
+                          {/* Appointment Metadata Details */}
+                          <div className="mt-4 pt-4 border-t border-gray-100 text-[14px] space-y-2">
+                            <div className="flex justify-between items-center text-textColor font-medium">
+                              <span>Booking ID:</span>
+                              <span className="font-mono text-[12px] bg-gray-100 px-2 py-0.5 rounded text-headingColor font-bold">
+                                {bookingId ? String(bookingId).slice(-8).toUpperCase() : "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-textColor font-medium">
+                              <span>Appointment Date:</span>
+                              <span className="font-semibold text-headingColor">
+                                {item.appointmentDate
+                                  ? new Date(item.appointmentDate).toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    })
+                                  : "Scheduled"}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-textColor font-medium">
+                              <span>Ticket Price:</span>
+                              <span className="font-bold text-headingColor">
+                                ₹{item.ticketPrice || prof?.ticketPrice || 500} INR
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-textColor font-medium">
+                              <span>Status:</span>
+                              <span
+                                className={`px-3 py-1 rounded-full text-[12px] font-bold capitalize ${
+                                  item.status === "approved"
+                                    ? "bg-green-100 text-green-700"
+                                    : item.status === "cancelled"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-yellow-100 text-yellow-700"
+                                }`}
+                              >
+                                {item.status || "Approved"}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-textColor font-medium">
+                              <span>Payment Status:</span>
+                              <span
+                                className={`px-3 py-1 rounded-full text-[12px] font-bold ${
+                                  item.isPaid !== false
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {item.isPaid !== false ? "Paid" : "Unpaid"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

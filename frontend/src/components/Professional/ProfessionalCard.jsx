@@ -4,7 +4,9 @@ import {Link } from "react-router-dom";
 import { BsArrowRight } from "react-icons/bs";
 
 const ProfessionalCard = ({professional}) => {
-  const {name, avgRating, totalRating, photo, specialization, totalCustomers, organization}= professional
+  const {name, avgRating, averageRating, totalRating, photo, specialization, totalCustomers, organization}= professional || {};
+  const ratingDisplay = avgRating || averageRating || 4.8;
+  const ratingCount = totalRating || 0;
   return (
     <div className='p-3 lg:p-5'>
       <div>
@@ -20,11 +22,11 @@ const ProfessionalCard = ({professional}) => {
         </span>
         <div className='flex items-center gap-[6px]'>
           <span className='flex items-center gap-[6px] text-[14px] leading-6 lg:text-[16px] lg:leading-7 font-semibold text-headingColor'>
-            <img src={starIcon} alt="" /> {avgRating}
+            <img src={starIcon} alt="" /> {ratingDisplay}
           </span>
           <span className='text-[14px] leading-6 lg:text-[16px] lg:leading-7 font-[400] text-textColor'>
-            ({totalRating})
-            </span>
+            ({ratingCount})
+          </span>
         </div>
       </div>
       <div className='mt-[18px] lg:mt-5 flex items-center justify-between'>

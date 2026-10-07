@@ -7,6 +7,11 @@ import Professionals from '../pages/Professionals/Professionals';
 import ProfessionalDetails from '../pages/Professionals/ProfessionalDetails';
 import MyAccount from '../pages/Users/MyAccount';
 import CheckoutSuccess from '../pages/CheckoutSuccess';
+import AdminDashboard from '../pages/Admin/AdminDashboard';
+import AdminUsers from '../pages/Admin/AdminUsers';
+import AdminProfessionals from '../pages/Admin/AdminProfessionals';
+import AdminBookings from '../pages/Admin/AdminBookings';
+import AdminRoute from '../components/Admin/AdminRoute';
 
 import { Routes, Route } from 'react-router-dom';
 
@@ -24,6 +29,38 @@ const Routers = () => {
       <Route path="/users/profile/me" element={<MyAccount />} />
       <Route path="/professionals/profile/me" element={<MyAccount />} />
       <Route path="/checkout-success" element={<CheckoutSuccess />} />
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <AdminRoute>
+            <AdminUsers />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/professionals"
+        element={
+          <AdminRoute>
+            <AdminProfessionals />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/bookings"
+        element={
+          <AdminRoute>
+            <AdminBookings />
+          </AdminRoute>
+        }
+      />
     </Routes>
   );
 };

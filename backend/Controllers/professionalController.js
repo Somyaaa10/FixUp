@@ -65,13 +65,14 @@ export const getAllProfessionals = async (req, res) => {
 
     if (query) {
       professionals = await Profession.find({
+        isActive: { $ne: false },
         $or: [
           { name: { $regex: query, $options: "i" } },
           { specialization: { $regex: query, $options: "i" } },
         ],
       }).select("-password");
     } else {
-      professionals = await Profession.find({}).select("-password");
+      professionals = await Profession.find({ isActive: { $ne: false } }).select("-password");
     }
 
     res.status(200).json({
@@ -95,7 +96,7 @@ export const getProfessionalProfile = async (req, res) => {
     }
 
     const { password, ...rest } = professional._doc;
-    const appointments = await Booking.find({ doctor: professionalId });
+    const appointments = await Booking.find({ professional: professionalId });
 
     res.status(200).json({
       success: true,

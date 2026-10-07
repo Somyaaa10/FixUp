@@ -41,7 +41,11 @@ const Login = () => {
         },
       });
 
-      navigate("/home");
+      if (result.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/home");
+      }
     } catch (err) {
       window.alert("Login error: " + err.message);
     }
@@ -76,6 +80,7 @@ const Login = () => {
             >
               <option value="customer">Customer</option>
               <option value="professional">Professional</option>
+              <option value="admin">Admin</option>
             </select>
           </div>
 

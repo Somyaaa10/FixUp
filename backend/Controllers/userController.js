@@ -95,21 +95,32 @@ export const getUserProfile = async (req, res) => {
 
 export const getMyAppointments = async (req, res) => {
   try {
-    // Step 1: Retrieve bookings for logged-in user
-    const bookings = await Booking.find({ user: req.userId });
+    // Step 1: Retrieve bookings for logged-in user and populate professional details
+    const bookings = await Booking.find({ user: req.userId }).populate(
+      "professional",
+      "-password"
+    );
 
-    // Step 2: Extract professional IDs from bookings
-    const professionalIds = bookings.map((b) => b.doctor || b.professional);
-
-    // Step 3: Retrieve professionals using extracted IDs
-    const professionals = await Profession.find({ _id: { $in: professionalIds } }).select("-password");
+    // Step 2: Map bookings into a clean structure combining booking & professional info
+    const appointments = bookings.map((booking) => ({
+      bookingId: booking._id,
+      appointmentDate: booking.appointmentDate,
+      status: booking.status,
+      isPaid: booking.isPaid,
+      ticketPrice: booking.ticketPrice,
+      professional: booking.professional || null,
+    }));
 
     res.status(200).json({
       success: true,
       message: "Appointments retrieved successfully",
-      data: professionals,
+      data: appointments,
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Failed to fetch appointments" });
+    console.error("Get appointments error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch appointments",
+    });
   }
 };
