@@ -4,9 +4,9 @@ const professionSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   name: { type: String, required: true },
-  phone: { type: Number },
+  phone: { type: mongoose.Schema.Types.Mixed },
   photo: { type: String },
-  ticketPrice: { type: Number },
+  ticketPrice: { type: Number, default: 500 },
   role: {
     type: String,
   },
@@ -23,6 +23,7 @@ const professionSchema = new mongoose.Schema({
 
   bio: { type: String, maxLength: 50 },
   about: { type: String },
+  services: [{ type: mongoose.Types.ObjectId, ref: "Service" }],
   timeSlots: { type: Array },
   reviews: [{ type: mongoose.Types.ObjectId, ref: "Review" }],
   averageRating: {

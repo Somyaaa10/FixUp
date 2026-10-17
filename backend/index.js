@@ -3,6 +3,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import authRoute from "./routes/auth.js";
 import userRoute from "./routes/user.js";
 import professionalRoute from "./routes/professional.js";
@@ -10,16 +12,33 @@ import reviewRoute from "./routes/review.js";
 import bookingRoute from "./routes/booking.js";
 import serviceRoute from "./routes/serviceRoutes.js";
 import adminRoute from "./routes/adminRoutes.js";
+import contactRoute from "./routes/contactRoutes.js";
 import { seedServicesIfEmpty } from "./Controllers/serviceController.js";
 import { seedAdminIfMissing } from "./scripts/createAdmin.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 8001;
+
+const allowedOrigins = [
+  process.env.CLIENT_SITE_URL,
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+].filter(Boolean);
 
 const corsOptions = {
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow non-browser requests or allowed origins or non-production environment
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS policy violation: origin not allowed"));
+    }
+  },
   credentials: true,
 };
 
@@ -53,6 +72,7 @@ app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/bookings", bookingRoute);
 app.use("/api/v1/services", serviceRoute);
 app.use("/api/v1/admin", adminRoute);
+app.use("/api/v1/contact", contactRoute);
 
 // Start server
 const startServer = async () => {

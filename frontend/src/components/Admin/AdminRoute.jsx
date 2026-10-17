@@ -1,16 +1,20 @@
 import React, { useContext } from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 
 const AdminRoute = ({ children }) => {
-  const { token, role } = useContext(AuthContext);
+  const { token, role, user } = useContext(AuthContext);
+  const location = useLocation();
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  if (!token || !user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (role !== "admin") {
-    return <Navigate to="/home" replace />;
+    if (role === "professional") {
+      return <Navigate to="/professional/dashboard" replace />;
+    }
+    return <Navigate to="/users/profile/me" replace />;
   }
 
   return children ? children : <Outlet />;

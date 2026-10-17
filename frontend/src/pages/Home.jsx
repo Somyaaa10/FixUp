@@ -1,295 +1,350 @@
-import React from 'react';
-import heroImg01 from "../assets/images/hero-img1.jpg";
-import heroImg02 from "../assets/images/hero-img2.jpg";
-import heroImg03 from "../assets/images/hero-img3.jpg";
-import icon01 from "../assets/images/icon1.png";
-import icon02 from "../assets/images/icon2.png";
-import icon03 from "../assets/images/icon3.png";
-import videoIcon from "../assets/images/video-icon.png";
-import featureImg from "../assets/images/feature-img.jpg";
-import faqImg from '../assets/images/faq-img.png';
-import avatarIcon from "../assets/images/avatar-img.png";
-import {Link} from 'react-router-dom';
-import {BsArrowRight} from 'react-icons/bs';
-import About from '../components/About/About';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FiSearch, FiStar, FiArrowRight } from 'react-icons/fi';
+import { BiCheckShield, BiSolidStar, BiCalendarCheck } from 'react-icons/bi';
+
+// Assets
+import heroBgImg from '../assets/images/hero-sink-plumber.webp';
+import cleaningWorkerImg from '../assets/images/homeClean-img.jpg';
+import plumbersWorkingImg from '../assets/images/plumber-img.jpg';
+import customer1Avatar from '../assets/images/customer1-avatar.png';
+import customer2Avatar from '../assets/images/customer2-avatar.png';
+import customer3Avatar from '../assets/images/customer3-avatar.png';
+
+// Components
 import ServiceList from '../components/Services/ServiceList';
-import ProfessionalList from '../components/Professional/ProfessionalList';
-import FaqList from '../components/Faq/FaqList';
-import Testimonial from '../components/Testimonial/Testimonial';
+
+const testimonials = [
+  {
+    name: 'Daniel K.',
+    avatar: customer1Avatar,
+    rating: 5,
+    text: 'Quick, reliable, and professional! I booked an AC repair online and within 30 minutes the technician arrived, identified the issue, and fixed it right away.'
+  },
+  {
+    name: 'Sarah M.',
+    avatar: customer2Avatar,
+    rating: 5,
+    text: 'The cleaning team exceeded my expectations. They arrived on time, worked with attention to detail, and left my entire home sparkling clean. It honestly feels like I\'m living in a brand-new house.'
+  },
+  {
+    name: 'Priya S.',
+    avatar: customer3Avatar,
+    rating: 5,
+    text: 'What I appreciate most is the combination of affordable pricing and trustworthy professionals. They explained everything clearly, charged exactly what was promised.'
+  }
+];
 
 const Home = () => {
-  return <>
-   {/* ========= hero section ========== */}
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
 
-   <section className="hero_section pt-[60px] 2xl:h-[800px]">
-    <div className="container">
-      <div className ="flex flex-col lg:flex-row gap-[90px] items-center justify-between">
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (query) {
+      navigate(`/professionals?query=${encodeURIComponent(query)}`);
+    } else {
+      navigate('/professionals');
+    }
+  };
 
-        {/* ========= hero content ============*/}
-        <div>
-          <div className="lg:w-[570px]">
+  return (
+    <div className="bg-[#F7F7F6]">
+      {/* ========================================================
+          1. HERO SECTION: FULL-WIDTH BACKGROUND HERO
+          ======================================================== */}
+      <section
+        className="relative w-full min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] flex items-center bg-cover bg-no-repeat bg-[78%_center] sm:bg-center overflow-hidden py-16 sm:py-20 lg:py-28"
+        style={{ backgroundImage: `url(${heroBgImg})` }}
+      >
+        {/* Dark Gradient Overlay: Strongest on the left, fading toward the right */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(90deg, rgba(20, 20, 20, 0.92) 0%, rgba(20, 20, 20, 0.76) 42%, rgba(20, 20, 20, 0.35) 80%, rgba(20, 20, 20, 0.18) 100%)',
+          }}
+        />
+        {/* Mobile Contrast Layer */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none bg-black/25 sm:bg-transparent"
+        />
 
-            <h1 className ="text-[36px] leading-[46px] text-headingColor font-[800] first-letter:md:text-ellipsis-[60px] first-letter:md:leading-[70px]">Your One-Stop Solution for Home Services, Anytime!
+        <div className="container relative z-10">
+          <div className="max-w-xl lg:max-w-2xl text-left">
+            <h1 className="font-heading text-4xl sm:text-5xl lg:text-[58px] xl:text-[64px] font-bold text-white tracking-tight leading-[1.12]">
+              Reliable Home <br />
+              Services, Right at <br />
+              <span className="text-[#C48B69]">your doorstep</span>
             </h1>
-            <p className="text_para">FixUp is a service appointment booking platform that allows users to book various household services like electrician, carpenter, driver, and more.</p>
 
-               <button className = "btn">Request an Appointment</button>
-          </div>
+            <p className="text-gray-200/90 text-sm sm:text-base lg:text-[17px] mt-5 max-w-xl leading-relaxed">
+              From Cleaning And Repairs To Expert Maintenance — Book Trusted Professionals With Just A Click.
+            </p>
 
-          {/* ========== hero counter =========== */}
-          <div className="mt-[30px] lg:mt-[70px] flex flex-col lg:flex-row lg:items-center gap-5
-          lg:gap-[30px]">
-            <div>
-              <h2 className="text-[36px] leading-[56px] lg:text-[44px] lg:leading-[54px] font-[700] text-headingColor">
-                20+
-              </h2>
-              <span className="w-[100px] h-2 bg-yellowColor rounded-full block mt-[-14px]">
-              </span>
-              <p className="text_para">Years of Experience</p>
+            {/* Service Search Bar */}
+            <form
+              onSubmit={handleSearchSubmit}
+              className="mt-8 bg-white rounded-full p-1.5 pl-5 shadow-2xl flex items-center gap-2 max-w-md sm:max-w-lg w-full focus-within:ring-2 focus-within:ring-[#AD7B5D]/40 transition"
+            >
+              <FiSearch className="w-5 h-5 text-[#6B7280] shrink-0" aria-hidden="true" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for a service"
+                aria-label="Search for a service"
+                className="w-full text-xs sm:text-sm text-[#202124] placeholder:text-[#6B7280]/70 bg-transparent focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="bg-[#AD7B5D] hover:bg-[#8F6248] text-white font-heading font-medium text-xs sm:text-sm px-6 sm:px-8 py-3 rounded-full transition-all duration-200 shadow-soft shrink-0"
+              >
+                Search
+              </button>
+            </form>
+
+            {/* Trust and Rating Badges */}
+            <div className="mt-8 sm:mt-10 flex items-center flex-wrap gap-6 sm:gap-9 text-white select-none">
+              <div className="flex items-center gap-2.5">
+                <BiCheckShield className="w-7 h-7 text-white/90 shrink-0" aria-hidden="true" />
+                <span className="text-xs sm:text-[13px] font-medium leading-snug text-white/95">
+                  Verified <br /> Professionals
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <BiSolidStar className="w-6 h-6 text-white/90 shrink-0" aria-hidden="true" />
+                <span className="text-xs sm:text-[13px] font-medium leading-snug text-white/95">
+                  4.9+ <br /> Average Rating
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <BiCalendarCheck className="w-6 h-6 text-white/90 shrink-0" aria-hidden="true" />
+                <span className="text-xs sm:text-[13px] font-medium leading-snug text-white/95">
+                  Easy <br /> Online Booking
+                </span>
+              </div>
             </div>
-
-            <div>
-              <h2 className="text-[36px] leading-[56px] lg:text-[44px] lg:leading-[54px] font-[700] text-headingColor">
-                10+
-              </h2>
-              <span className="w-[100px] h-2 bg-purpleColor rounded-full block mt-[-14px]">
-              </span>
-              <p className="text_para">Types of Professionals</p>
-            </div>
-
-            <div>
-              <h2 className="text-[36px] leading-[56px] lg:text-[44px] lg:leading-[54px] font-[700] text-headingColor">
-                100%
-              </h2>
-              <span className="w-[100px] h-2 bg-irisBlueColor rounded-full block mt-[-14px]">
-              </span>
-              <p className="text_para">Client Satisfaction</p>
-            </div>
-
           </div>
         </div>
-        {/* ========= hero content =============*/}
+      </section>
 
-        <div className="flex gap-[30px] justify-end">
-          <div>
-            <img className="w-full h-[650px] rounded-[20px]" src={heroImg01} alt="" />
+      {/* ========================================================
+          2. STATISTICS BENTO GRID: TRUSTED BY THOUSANDS
+          ======================================================== */}
+      <section className="py-14 sm:py-18 bg-white border-y border-[#EAE7E3]">
+        <div className="container">
+          {/* Header row */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end mb-12">
+            <div className="lg:col-span-6">
+              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124] tracking-tight">
+                Trusted By Thousands <br />
+                Of Homeowners.
+              </h2>
+            </div>
+            <div className="lg:col-span-6">
+              <p className="text-[#6B7280] text-xs sm:text-sm leading-relaxed max-w-xl">
+                For Years, We've Been Helping Families Take Care Of Their Homes By Providing Reliable, Professional Services That Make Life Easier And More Convenient. Our Mission Is To Simplify Home Maintenance.
+              </p>
+            </div>
           </div>
-          <div className="mt-[30px]">
-            <img src={heroImg02} alt="" className="w-[350px] h-[280px] mb-[30px] rounded-[20px]" />
-            <img src={heroImg03} alt="" className="w-[350px] h-[280px] rounded-[20px]" />
-          </div>
-        </div>
-      </div>
-    </div>
-   </section>
-   { /* ============= hero section end ============ */}
 
-   <section>
-    <div className= "container">
-      <div className="lg:w-[470px] mx-auto">
-        <h2 className='heading text-center'>
-          Providing the best home care services
-        </h2>
-        <p className="text_para text-center">
-          Fantastic services for everyone.Our house care system offers unmtached,
-          expert services.
-        </p>
-      </div>
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-[30px] mt-[30px] lg:mt-[55px]">
-
-        <div className="py-[30px] px-5">
-          <div className="flex items-center justify-center">
-            <img src={icon01} alt="" className=' w-[400px] h-[250px]'/>
+          {/* 6-Item Bento Grid matching reference */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Card 1: Pastel Yellow (Homes Served) */}
+            <div className="bg-[#FEF9E7] border border-[#FDE68A]/50 rounded-3xl p-7 flex flex-col justify-between min-h-[190px] shadow-soft">
+              <div>
+                <h3 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124]">
+                  15k+
+                </h3>
+                <p className="text-xs font-semibold text-[#202124] mt-1">
+                  Homes Served
+                </p>
+              </div>
+              <p className="text-[11px] text-[#6B7280] leading-snug">
+                Across Multiple Cities And Neighborhoods
+              </p>
             </div>
 
-            <div className="mt-[30px]">
-              <h2 className="text-[26px] leading-9 text-headingColor font-[700] text-center">
-                Find a Professional
-                </h2>
-                <p className="text-[16px] leading-7 text-textColorr font-[400] mt-4 text-center">
-                  World class care for everyone. Our home care services offers unmatched , expert home services.
+            {/* Card 2: Pastel Peach (On-Time Service) */}
+            <div className="bg-[#FDF2F0] border border-[#FECDD3]/50 rounded-3xl p-7 flex flex-col justify-between min-h-[190px] shadow-soft">
+              <div>
+                <h3 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124]">
+                  95%
+                </h3>
+                <p className="text-xs font-semibold text-[#202124] mt-1">
+                  On-Time Service
+                </p>
+              </div>
+              <p className="text-[11px] text-[#6B7280] leading-snug">
+                We Value Your Time And Deliver As Promised
+              </p>
+            </div>
+
+            {/* Card 3: Photo Card 1 */}
+            <div className="rounded-3xl overflow-hidden bg-gray-100 border border-[#EAE7E3] h-[190px] shadow-soft">
+              <img
+                src={cleaningWorkerImg}
+                alt="FixUp verified home cleaning technicians on task"
+                width={1200}
+                height={801}
+                loading="lazy"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Card 4: Photo Card 2 */}
+            <div className="rounded-3xl overflow-hidden bg-gray-100 border border-[#EAE7E3] h-[190px] shadow-soft">
+              <img
+                src={plumbersWorkingImg}
+                alt="FixUp certified plumbing specialists repairing household fixtures"
+                width={1200}
+                height={828}
+                loading="lazy"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Card 5: Pastel Mint (Certified Professionals) */}
+            <div className="bg-[#EFFBF5] border border-[#A7F3D0]/50 rounded-3xl p-7 flex flex-col justify-between min-h-[190px] shadow-soft">
+              <div>
+                <h3 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124]">
+                  500+
+                </h3>
+                <p className="text-xs font-semibold text-[#202124] mt-1">
+                  Certified Professionals
+                </p>
+              </div>
+              <p className="text-[11px] text-[#6B7280] leading-snug">
+                Skilled, Trained, And Background-Checked
+              </p>
+            </div>
+
+            {/* Card 6: Pastel Sky Blue (Customer Rating) */}
+            <div className="bg-[#F0F8FF] border border-[#BAE6FD]/50 rounded-3xl p-7 flex flex-col justify-between min-h-[190px] shadow-soft">
+              <div>
+                <h3 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124]">
+                  4.9/5
+                </h3>
+                <p className="text-xs font-semibold text-[#202124] mt-1">
+                  Customer Rating
+                </p>
+              </div>
+              <p className="text-[11px] text-[#6B7280] leading-snug">
+                Based On Thousands Of Verified Reviews
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================
+          3. SERVICES SECTION (6 CARDS WITH PASTEL ICON CIRCLES)
+          ======================================================== */}
+      <section className="py-16 sm:py-20 bg-[#F7F7F6]">
+        <div className="container">
+          <div className="max-w-xl mx-auto text-center mb-12">
+            <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124]">
+              What do you need help with?
+            </h2>
+            <p className="text-[#6B7280] text-sm mt-2.5">
+              Choose from our popular categories of home maintenance, repairs, and sanitization services.
+            </p>
+          </div>
+
+          <ServiceList />
+        </div>
+      </section>
+
+
+
+      {/* ========================================================
+          5. TESTIMONIALS: LOVED BY THOUSANDS OF HAPPY HOMEOWNERS
+          ======================================================== */}
+      <section className="py-16 sm:py-20 bg-[#F7F7F6]">
+        <div className="container">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end mb-12">
+            <div className="lg:col-span-6">
+              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[#202124] tracking-tight">
+                Loved By Thousands Of <br />
+                Happy Homeowners
+              </h2>
+            </div>
+            <div className="lg:col-span-6">
+              <p className="text-[#6B7280] text-xs sm:text-sm leading-relaxed max-w-xl">
+                "Every day, families rely on us to handle their cleaning, repairs, and home maintenance needs with care and professionalism — that's why thousands of homeowners continue to choose and recommend our services."
+              </p>
+            </div>
+          </div>
+
+          {/* 3 Review Cards matching reference */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {testimonials.map((review, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-3xl border border-[#EAE7E3] p-7 shadow-soft flex flex-col justify-between"
+              >
+                <p className="text-xs sm:text-sm text-[#202124] leading-relaxed">
+                  "{review.text}"
                 </p>
 
-                <Link to='/professionals' className="w-[44px] h-[44px] rounded-full border border-solid border-[#181A1E] mt-[30px] mx-auto
-                flex items-center justify-center group hover:bg-primaryColor hover:border-none">
-                  <BsArrowRight className ="group-hover:text-white w-6 h-5"/>
-                </Link>
-            </div>
+                <div className="mt-6 pt-4 border-t border-[#EAE7E3] flex items-center gap-3">
+                  <img
+                    src={review.avatar}
+                    alt={`${review.name}'s customer profile avatar`}
+                    width={36}
+                    height={36}
+                    loading="lazy"
+                    className="w-9 h-9 rounded-full object-cover"
+                  />
+                  <div>
+                    <h5 className="font-heading text-xs font-bold text-[#202124]">
+                      {review.name}
+                    </h5>
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      {[...Array(review.rating)].map((_, idx) => (
+                        <FiStar key={idx} className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      </section>
 
-        <div className="py-[30px] px-5">
-          <div className="flex items-center justify-center">
-            <img src={icon02} alt="" className='w-[400px] h-[250px]' />
+      {/* ========================================================
+          6. FINAL CTA: NEED HELP TODAY?
+          ======================================================== */}
+      <section className="py-12 sm:py-16 bg-[#F7F7F6]">
+        <div className="container max-w-4xl">
+          <div className="bg-[#EBF3EF]/60 border border-[#D1FAE5]/60 rounded-3xl p-10 sm:p-14 text-center shadow-soft">
+            <h2 className="font-heading text-2xl sm:text-3xl lg:text-4xl font-bold text-[#202124]">
+              Need Help Today? We're Just <br className="hidden sm:inline" />
+              A Click Away.
+            </h2>
+            <p className="text-[#6B7280] text-xs sm:text-sm mt-3 max-w-md mx-auto leading-relaxed">
+              Order Now And Experience Delivery The Way It Should Be - Fast, Safe, And Simple.
+            </p>
+            <div className="mt-7">
+              <Link to="/professionals">
+                <button className="bg-[#202124] hover:bg-black text-white font-heading font-medium text-xs sm:text-sm px-8 py-3.5 rounded-full transition shadow-soft inline-flex items-center gap-2">
+                  <span>Book A Service Now</span>
+                  <FiArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </Link>
             </div>
-
-            <div className="mt-[30px]">
-              <h2 className="text-[26px] leading-9 text-headingColor font-[700] text-center">
-                Find a Location
-                </h2>
-                <p className="text-[16px] leading-7 text-textColorr font-[400] mt-4 text-center">
-                  World class care for everyone. Our home care services offers unmatched , expert home services.
-                </p>
-
-                <Link to='/professionals' className="w-[44px] h-[44px] rounded-full border border-solid border-[#181A1E] mt-[30px] mx-auto
-                flex items-center justify-center group hover:bg-primaryColor hover:border-none">
-                  <BsArrowRight className ="group-hover:text-white w-6 h-5"/>
-                </Link>
-            </div>
+          </div>
         </div>
-
-        <div className="py-[30px] px-5">
-          <div className="flex items-center justify-center">
-            <img src={icon03} alt="" className='w-[400px] h-[250px]' />
-            </div>
-
-            <div className="mt-[30px]">
-              <h2 className="text-[26px] leading-9 text-headingColor font-[700] text-center">
-                Book An Appointment
-                </h2>
-                <p className="text-[16px] leading-7 text-textColorr font-[400] mt-4 text-center">
-                  World class care for everyone. Our home care services offers unmatched , expert home services.
-                </p>
-
-                <Link to='/professionals' className="w-[44px] h-[44px] rounded-full border border-solid border-[#181A1E] mt-[30px] mx-auto
-                flex items-center justify-center group hover:bg-primaryColor hover:border-none">
-                  <BsArrowRight className ="group-hover:text-white w-6 h-5"/>
-                </Link>
-            </div>
-        </div>
-       </div>
-      
+      </section>
     </div>
-   </section>
+  );
+};
 
-<About />  
-
-{/* ================= services section start =============== */}
-<section>
-  <div className="container">
-    <div className="xl:w-[470px] mx-auto">
-      <h2 className="heading text-center">Our Home Care Services</h2>
-      <p className="text_para text-center">
-        Genuine and affordable home care services for everyone.Our system offers umatched,expert services for home.
-      </p>
-    </div>
-
- <ServiceList />
- 
-  </div>
-</section>
-{/* ================= services section end =============== */}
-
-{/* ============ feature section start ============== */}
-<section>
-  <div className='container'>
-    <div className='flex items-center justify-between flex-col lg:flex-row'>
-{/* ============ feature content ============== */}
-<div className='xl:w-[670px]'>
-  <h2 className='heading'>
-    Get virtual consultation <br /> anytime.
-  </h2>
-
-  <ul className='pl-4'>
-    <li className='text_para'>
-      1.Schedule the appointment directly.
-    </li>
-    <li className='text_para'>
-      2.Search for your professional here, and contact them.
-    </li>
-    <li className='text_para'>
-      3.View our professionals who are free , and use online scheduling tool to select an appointment time.
-    </li>
-  </ul>
-  <Link to='/'>
-  <button className='btn'>Learn More</button>
-  </Link>
-</div>
-{/* ============ feature image ============== */}
-<div className='relative z-10 xl:w-[770px] flex justify-end mt-[50px] lg:mt-0'>
-  <img src={featureImg} className='w-[600px] h-[600px] rounded-[50px]' alt=''>
-  </img>
-  <div className='w-[150px] lg:w-[248px] bg-white absolute bottom-[50px] left-0 md:bottom-
-  [100px] md:left-5 z-20 p-2 pb-3 lg:pt-4 lg:px-4 lg:pb-[26px] rounded-[10px]'>
-    <div className='flex items-center justify-between'>
-      <div className='flex items-center gap-[6px] lg:gap-3'>
-        <p className='text-[10px] leading-[10px] lg:text-[14px] lg:leading-5 text-headingColor font-[600]'>
-          Tue, 24
-        </p>
-        <p className='text-[10px] leading-[10px] lg:text-[14px] lg:leading-5 text-textColor font-[400]'>
-          10:00
-        </p>
-      </div>
-      <span className='w-5 h-5 lg:w-[34px] lg:h-[34px] flex items-center justify-center bg-yellowColor rounded py-1 px-[6px] lg:py-3 lg:px-[9px]'>
-        <img src={videoIcon} alt="" />
-      </span>
-    </div>
-
-    <div className='w-[65px] lg:w-[96px] bg-[#CCF00F3] py-1 px-2 lg:py-[6px] lg:px-[10px] text-[8px] leading-[8px] lg:text-[12px]
-    lg:leading-4 text-irisBlueColor font-[500] mt-2 lg:mt-4 rounded-full'>
-      Appointment
-    </div>
-    <div className='flex items-center gap-[6px] lg:gap-[10px] mt-2 lg:mt-[18px]'>
-      <img src={avatarIcon} alt="" />
-      <h4 className='text-[10px] leading-3 lg:text--[16px] lg:leading-[22px] font-[700]
-      text-headingColor'>
-        Sophia Collins
-      </h4>
-    </div>
-  </div>
-  </div>
-</div>
-  </div>
-</section>
-{/* ============ feature section end ============== */}
-{/* ============ Our Professionals ============== */}
-
-<section>
-  <div className='container'>
-    <div className='xl:w-[470px] mx-auto'>
-      <h2 className='heading text-center'>Our Awesome Professionals</h2>
-      <p className='text_para text-center'>
-        Genuine home care services for everyone. Our extensive system offers unmatched,flawless,smooth services.
-      </p>
-    </div>
-    <ProfessionalList />
-  </div>
-</section>
-{/* ============ Our Professionals ============== */}
-{/* ============ faq section start ================= */}
-<section>
-  <div className='container'>
-    <div className='flex justify-between gap-[50px] lg:gap-0'>
-      <div className='w-1/2 hidden md:block'>
-      <img src={faqImg} alt="" className='h-[700px]' />
-      </div>
-      <div className='w-full md:w-1/2'>
-      <h2 className='heading'>
-        Most Questions by our beloved customers
-        </h2>
-        <FaqList />
-        </div>
-    </div>
-  </div>
-</section>
-{/* ============ faq section end ================= */}
-
-{/* ============ testimonial start ================= */}
-
-<section>
-  <div className='container'>
-    <div className='xl:w-[470px] mx-auto'>
-      <h2 className='heading text-center'>
-        What do our customers say?
-      </h2>
-      <p className='text_para text-center'>
-        World-class service for everyone.Our extensive system offers unmatched,expert,and smooth services.
-      </p>
-    </div>
-    <Testimonial />
-  </div>
-</section>
-{/* ============ testimonial end ================= */}
-   </>
-}
-
-export default Home
+export default Home;

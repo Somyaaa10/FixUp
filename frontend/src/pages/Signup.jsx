@@ -1,17 +1,17 @@
-import React from "react";
-import signupImg from "../assets/images/signup.gif";
-import avatar from "../assets/images/electrician-img.jpg";
+import React, { useState } from "react";
+import avatarImg from "../assets/images/avatar-img.png";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { BASE_URL } from "../config";
+import { FiUpload } from "react-icons/fi";
 
 const Signup = () => {
-  const [selectedFile, getSelectedFile] = useState(null);
-  const [previewURL, setpreviewURL] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    photo: selectedFile,
+    photo: "",
     gender: "",
     role: "customer",
   });
@@ -20,156 +20,182 @@ const Signup = () => {
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
   const handleFileInputChange = async (event) => {
     const file = event.target.files[0];
-    getSelectedFile(file);
+    setSelectedFile(file);
     setFormData({ ...formData, photo: file?.name || "" });
   };
+
   const submitHandler = async (event) => {
     event.preventDefault();
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/auth/register`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      },
-    );
-    const result = await response.json();
-    if (!response.ok) {
-      window.alert(result.message || "Registration failed");
-      return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/api/v1/auth/register`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        },
+      );
+      const result = await response.json();
+      setLoading(false);
+      if (!response.ok) {
+        window.alert(result.message || "Registration failed");
+        return;
+      }
+      window.alert(result.message || "Account created successfully");
+      navigate("/login");
+    } catch (err) {
+      setLoading(false);
+      window.alert("Registration error: " + err.message);
     }
-    window.alert(result.message || "Account created successfully");
-    navigate("/login");
   };
+
   return (
-    <section className="px-5 xl:px-0">
-      <div className="max-w-[1170px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2">
-          {/* =========== img box ============ */}
-          <div className="hidden lg:block bg-primaryColor rounded-l-lg">
-            <figure className="rounded-l-lg">
-              <img src={signupImg} alt="" className="w-full rounded-l-lg" />
-            </figure>
+    <div className="bg-[#F7F7F6] min-h-[calc(100vh-80px)] py-12 sm:py-16 flex items-center">
+      <div className="container max-w-xl mx-auto px-4">
+        <div className="bg-white border border-[#EAE7E3] rounded-3xl p-8 sm:p-10 shadow-soft">
+          <div className="text-center mb-8">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#AD7B5D] bg-[#AD7B5D]/10 px-3 py-1 rounded-full inline-block mb-2">
+              Join FixUp
+            </span>
+            <h2 className="font-heading text-2xl sm:text-3xl font-bold text-[#202124]">
+              Create an Account
+            </h2>
+            <p className="text-[#6B7280] text-xs mt-1.5">
+              Book services or register as a certified trade professional
+            </p>
           </div>
-          {/* ========== sign up form ============ */}
-          <div className="rounded-l-lg lg:pl-16 py-10">
-            <h3 className="text-headingColor text-[22px] leading-9 font-bold mb-10">
-              Create an <span className="text-primaryColor">account</span>
-            </h3>
-            <form onSubmit={submitHandler}>
-              <div className="mb-5">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full pr-4 py-3 border-b border-solid border-[#0066ff61] focus:outline-none focus:border-b-primaryColor text-[16px]
-              leading-7 text-headingColor placeholder:text-textColor rounded-md cursor-pointer"
-                  required
-                />
-              </div>
-              <div className="mb-5">
-                <input
-                  type="email"
-                  placeholder="Enter your email-id"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full pr-4 py-3 border-b border-solid border-[#0066ff61] focus:outline-none focus:border-b-primaryColor text-[16px]
-              leading-7 text-headingColor placeholder:text-textColor rounded-md cursor-pointer"
-                  required
-                />
-              </div>
-              <div className="mb-5">
-                <input
-                  type="password"
-                  placeholder="Password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full pr-4 py-3 border-b border-solid border-[#0066ff61] focus:outline-none focus:border-b-primaryColor text-[16px]
-              leading-7 text-headingColor placeholder:text-textColor rounded-md cursor-pointer"
-                  required
-                />
-              </div>
-              <div className="mb-5 flex items-center justify-between">
-                <label className="text-headingColor font-bold text-[16px] leading-7">
+
+          <form onSubmit={submitHandler} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-[#202124] block mb-1.5">
+                Full Name
+              </label>
+              <input
+                type="text"
+                placeholder="John Doe"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2.5 bg-white border border-[#EAE7E3] text-xs sm:text-sm text-[#202124] placeholder:text-[#6B7280]/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#AD7B5D]/20 focus:border-[#AD7B5D]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[#202124] block mb-1.5">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="name@example.com"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2.5 bg-white border border-[#EAE7E3] text-xs sm:text-sm text-[#202124] placeholder:text-[#6B7280]/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#AD7B5D]/20 focus:border-[#AD7B5D]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[#202124] block mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="Create a strong password"
+                name="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2.5 bg-white border border-[#EAE7E3] text-xs sm:text-sm text-[#202124] placeholder:text-[#6B7280]/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#AD7B5D]/20 focus:border-[#AD7B5D]"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-[#202124] block mb-1.5">
                   Are you a:
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                    className="text-textColor font-semibold text-[15px] leading-7 px-4 py-3 focus:outline-none"
-                  >
-                    <option value="customer">Customer</option>
-                    <option value="professional">Professional</option>
-                  </select>
                 </label>
-                <label className="text-headingColor font-bold text-[16px] leading-7">
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2.5 bg-white border border-[#EAE7E3] text-xs sm:text-sm text-[#202124] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#AD7B5D]/20 focus:border-[#AD7B5D] cursor-pointer"
+                >
+                  <option value="customer">Customer / Homeowner</option>
+                  <option value="professional">Professional / Specialist</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#202124] block mb-1.5">
                   Gender:
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
-                    className="text-textColor font-semibold text-[15px] leading-7 px-4 py-3 focus:outline-none"
-                  >
-                    <option value="">Select</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="others">Others</option>
-                  </select>
+                </label>
+                <select
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2.5 bg-white border border-[#EAE7E3] text-xs sm:text-sm text-[#202124] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#AD7B5D]/20 focus:border-[#AD7B5D] cursor-pointer"
+                >
+                  <option value="">Select</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="others">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <div className="w-11 h-11 rounded-full border border-[#EAE7E3] overflow-hidden bg-gray-50 shrink-0">
+                <img
+                  src={avatarImg}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="relative">
+                <input
+                  type="file"
+                  name="photo"
+                  id="customFile"
+                  accept=".jpg, .png"
+                  className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={handleFileInputChange}
+                />
+                <label
+                  htmlFor="customFile"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#F7F7F6] hover:bg-gray-200 border border-[#EAE7E3] text-xs font-semibold text-[#202124] rounded-xl cursor-pointer transition"
+                >
+                  <FiUpload className="w-3.5 h-3.5 text-[#AD7B5D]" />
+                  <span>{selectedFile ? selectedFile.name : "Upload Profile Photo"}</span>
                 </label>
               </div>
-              <div className="mb-5 flex items-center gap-3">
-                <figure className="w-[60px] h-[60px] rounded-full border-2 border-solid border-primaryColor flex items-center justify-center">
-                  <img
-                    src={avatar}
-                    alt=""
-                    className="w-full h-full rounded-full"
-                  />
-                </figure>
-                <div className="relative w-[130px] h-[50px]">
-                  <input
-                    type="file"
-                    name="photo"
-                    id="customFile"
-                    accept=".jpg, .png"
-                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                    onChange={handleFileInputChange}
-                  />
-                  <label
-                    htmlFor="customFile"
-                    className="absolute top-0 left-0 w-full h-full flex items-center px-[0.75rem] py-[0.375rem] text-[15px] leading-6 overflow-hidden bg-[#0066ff46] text-headingColor font-semibold rounded-lg truncate cursor-pointer"
-                  >
-                    Upload Photo
-                  </label>
-                </div>
-              </div>
-              <div className="mt-7">
-                <button
-                  type="submit"
-                  className="w-full bg-primaryColor text-white text-[18px] leading-[30px] rounded-lg px-4 py-3"
-                >
-                  Sign Up
-                </button>
-              </div>
-              <p className="mt-5 text-textColor text-center">
-                Already have an acoount?
-                <Link
-                  to="/login"
-                  className="text-primaryColor font-medium ml-1"
-                >
-                  Login
-                </Link>
-              </p>
-            </form>
-          </div>
+            </div>
+
+            <div className="pt-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#202124] hover:bg-black text-white font-heading font-semibold text-xs sm:text-sm py-3 rounded-full shadow-soft transition disabled:opacity-60"
+              >
+                {loading ? "Creating Account..." : "Create Account"}
+              </button>
+            </div>
+
+            <p className="mt-5 text-xs text-[#6B7280] text-center">
+              Already have an account?
+              <Link to="/login" className="text-[#AD7B5D] font-semibold ml-1 hover:underline">
+                Sign In
+              </Link>
+            </p>
+          </form>
         </div>
       </div>
-    </section>
+    </div>
   );
 };
 

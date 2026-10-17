@@ -13,11 +13,19 @@ export const authenticate = async (req, res, next) => {
       .json({ success: false, message: "No token, authorization denied" });
   }
 
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET environment variable is missing on server");
+    return res.status(500).json({
+      success: false,
+      message: "Server configuration error: JWT secret key missing",
+    });
+  }
+
   try {
     const token = authToken.split(" ")[1];
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "fixup_secret_key_12345");
+    // Verify token using configured JWT_SECRET
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.userId = decoded.user.id;
     req.role = decoded.user.role;

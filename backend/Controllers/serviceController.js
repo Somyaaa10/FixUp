@@ -1,4 +1,5 @@
 import Service from "../models/ServiceSchema.js";
+import Profession from "../models/professionSchema.js";
 import mongoose from "mongoose";
 
 // Initial default services data matching the frontend static data
@@ -112,3 +113,112 @@ export const getSingleService = async (req, res) => {
     });
   }
 };
+
+// POST /api/v1/services - Create or register a service (supports professional service registration & catalog selection)
+export const createOrRegisterService = async (req, res) => {
+  const { name, desc, bgColor, textColor, serviceId } = req.body || {};
+
+  try {
+    // 1. If an existing catalog service ID is provided, associate it directly
+    if (serviceId) {
+      if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Service ID format",
+        });
+      }
+
+      const existingService = await Service.findById(serviceId);
+      if (!existingService || !existingService.isActive) {
+        return res.status(404).json({
+          success: false,
+          message: "Selected service not found or inactive",
+        });
+      }
+
+      // If caller is an authenticated professional, associate service with their account
+      if (req.role === "professional" && req.userId) {
+        await Profession.findByIdAndUpdate(req.userId, {
+          $addToSet: { services: existingService._id },
+          $set: { specialization: existingService.name },
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Service selected and associated successfully",
+        data: existingService,
+      });
+    }
+
+    // 2. If service name is provided
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Service name is required (minimum 2 characters)",
+      });
+    }
+
+    const cleanName = name.trim();
+    const nameRegex = new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+
+    // Check if service already exists in catalog (case-insensitive)
+    let service = await Service.findOne({ name: nameRegex });
+
+    if (service) {
+      // Re-activate if inactive
+      if (!service.isActive) {
+        service.isActive = true;
+        await service.save();
+      }
+
+      // Associate with professional if caller is professional (avoids duplicate catalog entries)
+      if (req.role === "professional" && req.userId) {
+        await Profession.findByIdAndUpdate(req.userId, {
+          $addToSet: { services: service._id },
+          $set: { specialization: service.name },
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Service associated with professional successfully",
+        data: service,
+      });
+    }
+
+    // Otherwise, create a new catalog service
+    service = new Service({
+      name: cleanName,
+      desc: typeof desc === "string" && desc.trim().length > 0
+        ? desc.trim()
+        : `FixUp verified ${cleanName} home maintenance & repair solutions.`,
+      bgColor: bgColor || "rgba(254, 182, 13, .2)",
+      textColor: textColor || "#FEB60D",
+      isActive: true,
+    });
+
+    await service.save();
+
+    // Associate with calling professional
+    if (req.role === "professional" && req.userId) {
+      await Profession.findByIdAndUpdate(req.userId, {
+        $addToSet: { services: service._id },
+        $set: { specialization: service.name },
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Service created and registered successfully",
+      data: service,
+    });
+  } catch (err) {
+    console.error("Create or register service error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || "Failed to create or register service",
+    });
+  }
+};
+

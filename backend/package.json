@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "test": "node --test --test-concurrency=1 tests/securityPhase1.test.js tests/bookingPhase2.test.js tests/cancellationReviewPhase3.test.js tests/serviceCategoryPhase4.test.js tests/contactPhase5.test.js tests/e2eRegressionPhase6.test.js tests/professionalServicesBugFix.test.js tests/professionalProfileVisibility.test.js tests/dashboardAuditPhase7.test.js tests/professionalRazorpayPricing.test.js tests/phoneNormalizationRegression.test.js"
   },
   "author": "Ritesh",
   "license": "ISC",

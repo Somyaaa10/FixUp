@@ -11,10 +11,24 @@ const About = () => {
 
         {/* ========== about img ========*/}
         <div className="relative w-3/4 lg:w-1/2 xl:w-[770px] z-10 order-2 lg:order-1">
-          <img src={aboutImg} alt="" className='w-[600px] h-[500px] rounded-[50px]' />
+          <img
+            src={aboutImg}
+            alt="FixUp service technician providing quality home maintenance"
+            width={600}
+            height={500}
+            loading="lazy"
+            className="w-[600px] h-[500px] rounded-[50px] object-cover"
+          />
           <div className="absolute z-20 bottom-4 w-[200px] md:w-[300px] right-[-30%] md:right-[-7%]
           lg:right-[5%]">
-            <img src={aboutCardImg} alt="" />
+            <img
+              src={aboutCardImg}
+              alt=""
+              aria-hidden="true"
+              width={300}
+              height={200}
+              loading="lazy"
+            />
           </div>
         </div>
 

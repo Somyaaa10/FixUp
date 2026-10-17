@@ -1,7 +1,49 @@
 import React, { useContext, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
+import { BASE_URL } from "../../config";
+import AdminLayout from "./AdminLayout";
+import StatusBadge from "../../components/Dashboard/StatusBadge";
+import SearchToolbar from "../../components/Dashboard/SearchToolbar";
+import Pagination from "../../components/Dashboard/Pagination";
+import EmptyState from "../../components/Dashboard/EmptyState";
+import ErrorState from "../../components/Dashboard/ErrorState";
+import LoadingSkeleton from "../../components/Dashboard/LoadingSkeleton";
+import ConfirmModal from "../../components/Dashboard/ConfirmModal";
+import DetailModal from "../../components/Dashboard/DetailModal";
 import userImg from "../../assets/images/avatar-img.png";
+import {
+  FiBriefcase,
+  FiEye,
+  FiEdit2,
+  FiTrash2,
+  FiCheck,
+  FiX,
+  FiPlus,
+  FiStar,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiCalendar,
+  FiTool,
+} from "react-icons/fi";
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "N/A";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
 const AdminProfessionals = () => {
   const { token } = useContext(AuthContext);
@@ -14,16 +56,15 @@ const AdminProfessionals = () => {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(""); // "" (All), "active", "inactive"
+  const [statusFilter, setStatusFilter] = useState(""); // "", "pending", "approved", "active", "inactive"
 
-  // Modal states
+  // Modals
   const [selectedProf, setSelectedProf] = useState(null);
   const [profDetails, setProfDetails] = useState(null);
-  const [showViewModal, setShowViewModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [profToEdit, setProfToEdit] = useState(null);
+  const [profToToggle, setProfToToggle] = useState(null);
+  const [profToDelete, setProfToDelete] = useState(null);
 
   // Form states for Add / Edit
   const [formData, setFormData] = useState({
@@ -33,18 +74,23 @@ const AdminProfessionals = () => {
     ticketPrice: 500,
     photo: "",
     bio: "",
+    password: "",
   });
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState("");
+  const [toastMessage, setToastMessage] = useState({ type: "", text: "" });
+
+  const showToast = (type, text) => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage({ type: "", text: "" }), 4000);
+  };
 
   const fetchProfessionals = async () => {
     setLoading(true);
     setError(null);
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
     const headers = { Authorization: `Bearer ${token}` };
 
-    let url = `${baseUrl}/api/v1/admin/professionals?page=${page}&limit=10`;
+    let url = `${BASE_URL}/api/v1/admin/professionals?page=${page}&limit=10`;
     if (search.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
     if (statusFilter) url += `&status=${statusFilter}`;
 
@@ -58,10 +104,10 @@ const AdminProfessionals = () => {
 
       setProfessionals(data.data || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 1 });
-      setLoading(false);
     } catch (err) {
       console.error("Fetch professionals error:", err);
-      setError("Unable to load professionals. Please try again.");
+      setError(err.message || "Unable to load professionals. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -72,21 +118,12 @@ const AdminProfessionals = () => {
     }
   }, [token, page, statusFilter]);
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setPage(1);
-    fetchProfessionals();
-  };
-
-  // Fetch detailed info including booking stats for view modal
-  const handleOpenViewModal = async (prof) => {
+  // View Details with Booking Stats
+  const handleViewDetails = async (prof) => {
     setSelectedProf(prof);
     setProfDetails(null);
-    setShowViewModal(true);
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
-
     try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/professionals/${prof._id}`, {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals/${prof._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -94,45 +131,101 @@ const AdminProfessionals = () => {
         setProfDetails(data.data);
       }
     } catch (err) {
-      console.error("Fetch professional details error:", err);
+      console.error("Error fetching prof stats:", err);
     }
   };
 
-  const handleOpenEditModal = (prof) => {
-    setSelectedProf(prof);
-    setFormData({
-      name: prof.name || "",
-      email: prof.email || "",
-      specialization: prof.specialization || "Electrician",
-      ticketPrice: prof.ticketPrice || 500,
-      photo: prof.photo || "",
-      bio: prof.bio || "",
-    });
-    setActionFeedback("");
-    setShowEditModal(true);
+  // Quick Approve & Activate Workflow
+  const handleApproveProfessional = async (prof) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals/${prof._id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isApproved: "approved", isActive: true }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to approve professional");
+      }
+
+      showToast("success", `${prof.name} has been approved and activated for marketplace visibility`);
+      fetchProfessionals();
+    } catch (err) {
+      showToast("error", err.message || "Error approving professional");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleOpenAddModal = () => {
-    setFormData({
-      name: "",
-      email: "",
-      specialization: "Electrician",
-      ticketPrice: 500,
-      photo: "",
-      bio: "",
-    });
-    setActionFeedback("");
-    setShowAddModal(true);
+  // Toggle Active State
+  const handleToggleStatus = async () => {
+    if (!profToToggle) return;
+    setActionLoading(true);
+    const newActive = profToToggle.isActive === false ? true : false;
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals/${profToToggle._id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: newActive }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to update status");
+      }
+
+      showToast("success", `${profToToggle.name} ${newActive ? "activated" : "deactivated"}`);
+      setProfToToggle(null);
+      fetchProfessionals();
+    } catch (err) {
+      showToast("error", err.message || "Error updating status");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
+  // Delete Safeguard
+  const handleDeleteProfessional = async () => {
+    if (!profToDelete) return;
+    setActionLoading(true);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals/${profToDelete._id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to delete professional");
+      }
+
+      showToast("success", `${profToDelete.name} deleted successfully`);
+      setProfToDelete(null);
+      fetchProfessionals();
+    } catch (err) {
+      showToast("error", err.message || "Failed to delete professional");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Create Professional Form Submit
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
 
     try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/professionals`, {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,24 +239,33 @@ const AdminProfessionals = () => {
         throw new Error(data.message || "Failed to create professional");
       }
 
+      showToast("success", `Professional ${formData.name} added successfully`);
       setShowAddModal(false);
+      setFormData({
+        name: "",
+        email: "",
+        specialization: "Electrician",
+        ticketPrice: 500,
+        photo: "",
+        bio: "",
+        password: "",
+      });
       fetchProfessionals();
     } catch (err) {
-      setActionFeedback(err.message || "Error creating professional");
+      showToast("error", err.message || "Error creating professional");
     } finally {
       setActionLoading(false);
     }
   };
 
+  // Edit Professional Form Submit
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedProf) return;
+    if (!profToEdit) return;
     setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
 
     try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/professionals/${selectedProf._id}`, {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/professionals/${profToEdit._id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -177,284 +279,259 @@ const AdminProfessionals = () => {
         throw new Error(data.message || "Failed to update professional");
       }
 
-      setShowEditModal(false);
-      setSelectedProf(null);
+      showToast("success", `Professional details updated`);
+      setProfToEdit(null);
       fetchProfessionals();
     } catch (err) {
-      setActionFeedback(err.message || "Error updating professional");
+      showToast("error", err.message || "Error updating professional");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleToggleStatus = async () => {
-    if (!selectedProf) return;
-    setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
-    const newStatus = selectedProf.isActive === false ? true : false;
-
-    try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/professionals/${selectedProf._id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ isActive: newStatus }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to update status");
-      }
-
-      setShowStatusModal(false);
-      setSelectedProf(null);
-      fetchProfessionals();
-    } catch (err) {
-      setActionFeedback(err.message || "Error updating status");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeleteProfessional = async () => {
-    if (!selectedProf) return;
-    setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
-
-    try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/professionals/${selectedProf._id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to delete professional");
-      }
-
-      setShowDeleteModal(false);
-      setSelectedProf(null);
-      fetchProfessionals();
-    } catch (err) {
-      setActionFeedback(err.message || "Error deleting professional");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "N/A";
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+  const openEditModal = (p) => {
+    setProfToEdit(p);
+    setFormData({
+      name: p.name || "",
+      email: p.email || "",
+      specialization: p.specialization || "Electrician",
+      ticketPrice: p.ticketPrice || 500,
+      photo: p.photo || "",
+      bio: p.bio || "",
+      password: "",
     });
   };
 
   return (
-    <section className="px-5 xl:px-0 py-10 bg-gray-50 min-h-screen">
-      <div className="max-w-[1170px] mx-auto space-y-6">
-        {/* Navigation Tabs Header */}
-        <div className="flex items-center gap-4 border-b pb-4">
-          <Link
-            to="/admin"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
+    <AdminLayout
+      title="Professional Management"
+      subtitle="Manage home-service trades, approve specialists, and monitor marketplace directory visibility"
+      actionButton={
+        <button
+          onClick={() => {
+            setFormData({
+              name: "",
+              email: "",
+              specialization: "Electrician",
+              ticketPrice: 500,
+              photo: "",
+              bio: "",
+              password: "",
+            });
+            setShowAddModal(true);
+          }}
+          className="px-4 py-2 bg-[#111111] hover:bg-black text-white text-xs font-semibold rounded-lg inline-flex items-center gap-2 transition-colors"
+        >
+          <FiPlus className="w-4 h-4" />
+          <span>Add Professional</span>
+        </button>
+      }
+    >
+      <div className="space-y-6">
+        {/* Toast */}
+        {toastMessage.text && (
+          <div
+            className={`p-4 rounded-xl border flex items-center justify-between text-xs sm:text-sm font-medium ${
+              toastMessage.type === "success"
+                ? "bg-white border-[#16A34A]/40 text-[#16A34A] shadow-xs"
+                : "bg-white border-[#DC2626]/40 text-[#DC2626] shadow-xs"
+            }`}
           >
-            Dashboard Overview
-          </Link>
-          <Link
-            to="/admin/users"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
-          >
-            User Management
-          </Link>
-          <Link
-            to="/admin/professionals"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-white bg-primaryColor shadow-sm"
-          >
-            Professional Management
-          </Link>
-          <Link
-            to="/admin/bookings"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
-          >
-            Booking Management
-          </Link>
-        </div>
-
-
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] leading-9 font-bold text-headingColor">
-              Professional Management
-            </h1>
-            <p className="text-textColor text-[15px] mt-1">
-              Manage FixUp service professionals, prices, profiles, and account status.
-            </p>
-          </div>
-          <button
-            onClick={handleOpenAddModal}
-            className="bg-primaryColor text-white px-5 py-2.5 rounded-lg font-bold text-[14px] shadow-sm hover:bg-blue-700 flex items-center justify-center gap-2 self-start md:self-auto"
-          >
-            + Add Professional
-          </button>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 flex-1">
-            <input
-              type="text"
-              placeholder="Search by name, email, specialization..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full max-w-[400px] px-4 py-2 border rounded-md focus:outline-none focus:border-primaryColor text-[14px]"
-            />
+            <div className="flex items-center gap-2">
+              {toastMessage.type === "success" ? (
+                <FiCheckCircle className="w-4 h-4 text-[#16A34A]" />
+              ) : (
+                <FiAlertCircle className="w-4 h-4 text-[#DC2626]" />
+              )}
+              <span>{toastMessage.text}</span>
+            </div>
             <button
-              type="submit"
-              className="bg-primaryColor text-white px-4 py-2 rounded-md font-semibold text-[14px] hover:bg-blue-700"
+              onClick={() => setToastMessage({ type: "", text: "" })}
+              className="p-1 hover:opacity-75"
             >
-              Search
+              <FiX className="w-4 h-4" />
             </button>
-          </form>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[14px] text-textColor font-medium">Status:</span>
-            <button
-              onClick={() => { setStatusFilter(""); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "" ? "bg-primaryColor text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => { setStatusFilter("active"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "active" ? "bg-green-600 text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => { setStatusFilter("inactive"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "inactive" ? "bg-red-600 text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              Inactive
-            </button>
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="p-10 text-center bg-white rounded-xl shadow-sm border">
-            <p className="text-[16px] font-semibold text-primaryColor animate-pulse">
-              Loading professionals...
-            </p>
           </div>
         )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <div className="p-6 bg-red-50 text-red-700 rounded-xl border border-red-200 text-center font-semibold">
-            {error}
-          </div>
+        {/* Search & Filters */}
+        <SearchToolbar
+          search={search}
+          onSearchChange={setSearch}
+          onSearchSubmit={() => {
+            setPage(1);
+            fetchProfessionals();
+          }}
+          placeholder="Search by name, email, or trade..."
+          filters={[
+            { label: "All", value: "" },
+            { label: "Pending Approvals", value: "pending" },
+            { label: "Approved", value: "approved" },
+            { label: "Active", value: "active" },
+            { label: "Inactive", value: "inactive" },
+          ]}
+          activeFilter={statusFilter}
+          onFilterChange={(val) => {
+            setStatusFilter(val);
+            setPage(1);
+          }}
+        />
+
+        {loading && <LoadingSkeleton type="table" count={5} />}
+
+        {!loading && error && (
+          <ErrorState
+            title="Failed to retrieve professionals"
+            message={error}
+            onRetry={fetchProfessionals}
+          />
         )}
 
-        {/* Professionals Table */}
-        {!loading && !error && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {professionals.length === 0 ? (
-              <div className="p-10 text-center text-textColor font-semibold">
-                No professionals found.
-              </div>
-            ) : (
+        {!loading && !error && professionals.length === 0 && (
+          <EmptyState
+            icon={FiBriefcase}
+            title="No professionals found"
+            description={
+              search
+                ? `No specialist records matching "${search}".`
+                : statusFilter
+                ? `No professionals matching filter "${statusFilter}".`
+                : "No trade professionals registered yet."
+            }
+            actionLabel={search || statusFilter ? "Reset Filters" : "Add Professional"}
+            onAction={() => {
+              if (search || statusFilter) {
+                setSearch("");
+                setStatusFilter("");
+                setPage(1);
+              } else {
+                setShowAddModal(true);
+              }
+            }}
+          />
+        )}
+
+        {!loading && !error && professionals.length > 0 && (
+          <div className="space-y-4">
+            <div className="bg-white border border-[#E5E5E5] rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[14px]">
-                  <thead className="bg-gray-50 text-textColor text-[12px] uppercase font-bold border-b">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#F5F5F5] text-[#525252] font-semibold border-b border-[#E5E5E5] uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="p-4">Photo</th>
-                      <th className="p-4">Name</th>
-                      <th className="p-4">Specialization</th>
-                      <th className="p-4">Email</th>
-                      <th className="p-4">Price</th>
-                      <th className="p-4">Rating</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Actions</th>
+                      <th className="py-3 px-4">Professional</th>
+                      <th className="py-3 px-4">Specialization</th>
+                      <th className="py-3 px-4">Base Rate</th>
+                      <th className="py-3 px-4">Approval</th>
+                      <th className="py-3 px-4">Visibility</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-[#E5E5E5]">
                     {professionals.map((p) => {
+                      const isPending = p.isApproved === "pending" || !p.isApproved;
+                      const isApproved = p.isApproved === "approved";
                       const isActive = p.isActive !== false;
-                      const rating = p.averageRating || p.avgRating || 4.8;
 
                       return (
-                        <tr key={p._id} className="hover:bg-gray-50">
-                          <td className="p-4">
-                            <figure className="w-10 h-10 rounded-full overflow-hidden border border-primaryColor">
+                        <tr key={p._id} className="hover:bg-[#F5F5F5] transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
                               <img
                                 src={p.photo || userImg}
                                 alt={p.name}
-                                className="w-full h-full object-cover"
+                                className="w-8 h-8 rounded-full object-cover border border-[#E5E5E5]"
+                                onError={(e) => {
+                                  e.currentTarget.src = userImg;
+                                }}
                               />
-                            </figure>
+                              <div className="min-w-0">
+                                <span className="font-bold text-[#111111] block">
+                                  {p.name}
+                                </span>
+                                <span className="text-[11px] text-[#737373] truncate block">
+                                  {p.email}
+                                </span>
+                              </div>
+                            </div>
                           </td>
-                          <td className="p-4 font-semibold text-headingColor">{p.name}</td>
-                          <td className="p-4">
-                            <span className="bg-[#CCF0F3] text-irisBlueColor px-2.5 py-1 rounded text-[12px] font-bold">
-                              {p.specialization}
+
+                          <td className="py-3.5 px-4">
+                            <span className="font-semibold text-[#111111] block">
+                              {p.specialization || "Home Service"}
+                            </span>
+                            <span className="text-[10px] text-[#737373] flex items-center gap-1">
+                              <FiStar className="w-3 h-3 text-amber-500 fill-amber-500" />
+                              <span>{p.averageRating ? p.averageRating.toFixed(1) : "5.0"}</span>
                             </span>
                           </td>
-                          <td className="p-4 text-textColor">{p.email}</td>
-                          <td className="p-4 font-bold text-headingColor">₹{p.ticketPrice || 500}</td>
-                          <td className="p-4 font-bold text-yellow-500">★ {rating}</td>
-                          <td className="p-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[12px] font-bold ${
-                                isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {isActive ? "Active" : "Inactive"}
-                            </span>
+
+                          <td className="py-3.5 px-4 font-bold text-[#111111]">
+                            {formatCurrency(p.ticketPrice || 500)}
                           </td>
-                          <td className="p-4 text-right space-x-2">
-                            <button
-                              onClick={() => handleOpenViewModal(p)}
-                              className="px-3 py-1 bg-gray-100 text-headingColor rounded text-[12px] font-semibold hover:bg-gray-200"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => handleOpenEditModal(p)}
-                              className="px-3 py-1 bg-blue-50 text-blue-700 rounded text-[12px] font-semibold hover:bg-blue-100"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => { setSelectedProf(p); setActionFeedback(""); setShowStatusModal(true); }}
-                              className={`px-3 py-1 rounded text-[12px] font-semibold ${
-                                isActive
-                                  ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                                  : "bg-green-100 text-green-800 hover:bg-green-200"
-                              }`}
-                            >
-                              {isActive ? "Disable" : "Activate"}
-                            </button>
-                            <button
-                              onClick={() => { setSelectedProf(p); setActionFeedback(""); setShowDeleteModal(true); }}
-                              className="px-3 py-1 bg-red-100 text-red-700 rounded text-[12px] font-semibold hover:bg-red-200"
-                            >
-                              Delete
-                            </button>
+
+                          <td className="py-3.5 px-4">
+                            <StatusBadge type="approval" status={p.isApproved} />
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <StatusBadge type="active" status={isActive} />
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Approve Action */}
+                              {isPending && (
+                                <button
+                                  onClick={() => handleApproveProfessional(p)}
+                                  disabled={actionLoading}
+                                  className="px-2 py-1 text-xs font-semibold rounded-lg bg-[#16A34A] hover:bg-emerald-700 text-white transition-colors inline-flex items-center gap-1"
+                                  title="Approve & Activate"
+                                >
+                                  <FiCheck className="w-3 h-3" />
+                                  <span>Approve</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleViewDetails(p)}
+                                className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#111111] hover:bg-[#E5E5E5] transition-colors"
+                                title="View Details"
+                                aria-label="View Details"
+                              >
+                                <FiEye className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => openEditModal(p)}
+                                className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#111111] hover:bg-[#E5E5E5] transition-colors"
+                                title="Edit Professional"
+                                aria-label="Edit Professional"
+                              >
+                                <FiEdit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => setProfToToggle(p)}
+                                className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#111111] hover:bg-[#E5E5E5] transition-colors"
+                                title={isActive ? "Deactivate Professional" : "Activate Professional"}
+                                aria-label="Toggle active status"
+                              >
+                                <FiCheckCircle
+                                  className={`w-3.5 h-3.5 ${
+                                    isActive ? "text-[#16A34A]" : "text-[#737373]"
+                                  }`}
+                                />
+                              </button>
+
+                              <button
+                                onClick={() => setProfToDelete(p)}
+                                className="p-1.5 rounded-lg border border-[#DC2626]/40 text-[#DC2626] hover:bg-[#DC2626]/10 transition-colors"
+                                title="Delete Professional"
+                                aria-label="Delete Professional"
+                              >
+                                <FiTrash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -462,366 +539,352 @@ const AdminProfessionals = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
 
-            {/* Pagination Controls */}
-            {pagination.pages > 1 && (
-              <div className="p-4 bg-gray-50 border-t flex items-center justify-between">
-                <span className="text-[13px] text-textColor font-medium">
-                  Showing Page {pagination.page} of {pagination.pages} ({pagination.total} Total Professionals)
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={page <= 1}
-                    onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                    className="px-3 py-1.5 rounded bg-white border text-[13px] font-bold disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-3 text-[13px] font-bold">{page}</span>
-                  <button
-                    disabled={page >= pagination.pages}
-                    onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
-                    className="px-3 py-1.5 rounded bg-white border text-[13px] font-bold disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.pages}
+              totalItems={pagination.total}
+              limit={pagination.limit}
+              onPageChange={(newPage) => setPage(newPage)}
+            />
           </div>
         )}
 
-        {/* Modal 1: View Professional Details */}
-        {showViewModal && selectedProf && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[550px] w-full p-6 space-y-4 shadow-xl border">
-              <div className="flex items-center gap-4 border-b pb-3">
-                <figure className="w-16 h-16 rounded-full overflow-hidden border border-primaryColor">
-                  <img src={selectedProf.photo || userImg} alt={selectedProf.name} className="w-full h-full object-cover" />
-                </figure>
-                <div>
-                  <h3 className="text-[20px] font-bold text-headingColor">{selectedProf.name}</h3>
-                  <span className="bg-[#CCF0F3] text-irisBlueColor px-2.5 py-0.5 rounded text-[12px] font-bold">
-                    {selectedProf.specialization}
-                  </span>
+        {/* View Details Modal with Statistics */}
+        <DetailModal
+          isOpen={Boolean(selectedProf)}
+          onClose={() => {
+            setSelectedProf(null);
+            setProfDetails(null);
+          }}
+          title={selectedProf?.name || "Professional Profile"}
+          subtitle={`Trade: ${selectedProf?.specialization || "Specialist"}`}
+          footer={
+            <div className="flex items-center justify-between w-full">
+              {selectedProf?.isApproved === "pending" && (
+                <button
+                  onClick={() => {
+                    handleApproveProfessional(selectedProf);
+                    setSelectedProf(null);
+                  }}
+                  className="px-3 py-1.5 bg-[#16A34A] hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  <FiCheck className="w-3.5 h-3.5" />
+                  <span>Approve & Make Live</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSelectedProf(null);
+                  setProfDetails(null);
+                }}
+                className="px-4 py-1.5 bg-[#111111] text-white text-xs font-semibold rounded-lg hover:bg-black transition-colors ml-auto"
+              >
+                Close
+              </button>
+            </div>
+          }
+        >
+          {selectedProf && (
+            <div className="space-y-4 text-xs">
+              <div className="p-3 bg-[#F5F5F5] rounded-xl border border-[#E5E5E5] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={selectedProf.photo || userImg}
+                    alt={selectedProf.name}
+                    className="w-12 h-12 rounded-full object-cover border border-[#E5E5E5]"
+                  />
+                  <div>
+                    <h4 className="font-bold text-sm text-[#111111]">{selectedProf.name}</h4>
+                    <p className="text-[11px] text-[#737373]">{selectedProf.email}</p>
+                    <p className="text-[11px] text-[#525252] mt-0.5">
+                      Base Fee: <span className="font-bold">{formatCurrency(selectedProf.ticketPrice || 500)}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <StatusBadge type="approval" status={selectedProf.isApproved} />
+                  <div>
+                    <StatusBadge type="active" status={selectedProf.isActive !== false} />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2 text-[14px]">
-                <p><strong>Email:</strong> {selectedProf.email}</p>
-                <p><strong>Ticket Price:</strong> ₹{selectedProf.ticketPrice || 500} INR</p>
-                <p><strong>Rating:</strong> ★ {selectedProf.averageRating || selectedProf.avgRating || 4.8} ({selectedProf.totalRating || 0} reviews)</p>
-                <p><strong>Account Status:</strong> {selectedProf.isActive !== false ? "Active" : "Inactive"}</p>
-                <p><strong>Joined Date:</strong> {formatDate(selectedProf.createdAt)}</p>
-                {selectedProf.bio && <p><strong>Bio:</strong> {selectedProf.bio}</p>}
-              </div>
-
-              {/* Statistics Section */}
+              {/* Statistics Breakdown */}
               {profDetails?.statistics && (
-                <div className="bg-gray-50 p-4 rounded-lg border space-y-1 text-[13px]">
-                  <p className="font-bold text-headingColor mb-2">Booking Performance Stats:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <p>Total Bookings: <strong>{profDetails.statistics.totalBookings}</strong></p>
-                    <p>Approved: <strong className="text-green-600">{profDetails.statistics.approvedBookings}</strong></p>
-                    <p>Pending: <strong className="text-yellow-600">{profDetails.statistics.pendingBookings}</strong></p>
-                    <p>Cancelled: <strong className="text-red-600">{profDetails.statistics.cancelledBookings}</strong></p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 bg-white border border-[#E5E5E5] rounded-lg text-center">
+                    <span className="text-[10px] text-[#737373] block uppercase">Total Jobs</span>
+                    <span className="text-base font-bold text-[#111111]">
+                      {profDetails.statistics.totalBookings ?? 0}
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-white border border-[#E5E5E5] rounded-lg text-center">
+                    <span className="text-[10px] text-[#737373] block uppercase">Confirmed</span>
+                    <span className="text-base font-bold text-[#111111]">
+                      {profDetails.statistics.approvedBookings ?? 0}
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-white border border-[#E5E5E5] rounded-lg text-center">
+                    <span className="text-[10px] text-[#737373] block uppercase">Completed</span>
+                    <span className="text-base font-bold text-[#16A34A]">
+                      {profDetails.statistics.completedBookings ?? 0}
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-white border border-[#E5E5E5] rounded-lg text-center">
+                    <span className="text-[10px] text-[#737373] block uppercase">Cancelled</span>
+                    <span className="text-base font-bold text-[#DC2626]">
+                      {profDetails.statistics.cancelledBookings ?? 0}
+                    </span>
                   </div>
                 </div>
               )}
 
-              <div className="pt-4 border-t text-right">
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="px-5 py-2 bg-primaryColor text-white font-semibold rounded-md text-[14px]"
-                >
-                  Close
-                </button>
+              {selectedProf.bio && (
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[11px] text-[#737373] block font-semibold">Bio</span>
+                  <p className="text-[#111111] mt-0.5">{selectedProf.bio}</p>
+                </div>
+              )}
+
+              {selectedProf.about && (
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[11px] text-[#737373] block font-semibold">About</span>
+                  <p className="text-[#525252] mt-0.5 leading-relaxed">{selectedProf.about}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DetailModal>
+
+        {/* Add Professional Modal */}
+        <DetailModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          title="Add New Professional"
+          subtitle="Register an authorized home service specialist"
+        >
+          <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g. Ramesh Kumar"
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="ramesh@example.com"
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Modal 2: Add Professional */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[500px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[20px] font-bold text-headingColor border-b pb-2">
-                Add New Professional
-              </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Specialization</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.specialization}
+                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  placeholder="e.g. Electrician, Plumber"
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
+              </div>
 
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
-                </div>
-              )}
-
-              <form onSubmit={handleAddSubmit} className="space-y-3 text-[14px]">
-                <div>
-                  <label className="block font-semibold mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Specialization *</label>
-                  <select
-                    value={formData.specialization}
-                    onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="Electrician">Electrician</option>
-                    <option value="Plumber">Plumber</option>
-                    <option value="Carpenter">Carpenter</option>
-                    <option value="Driver">Driver</option>
-                    <option value="Painter">Painter</option>
-                    <option value="House Cleaning">House Cleaning</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Ticket Price (₹ INR)</label>
-                  <input
-                    type="number"
-                    value={formData.ticketPrice}
-                    onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Photo Image URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://..."
-                    value={formData.photo}
-                    onChange={(e) => setFormData({ ...formData, photo: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Bio</label>
-                  <textarea
-                    rows={2}
-                    value={formData.bio}
-                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  ></textarea>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-3 border-t">
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={actionLoading}
-                    className="px-5 py-2 bg-primaryColor text-white font-semibold rounded-md text-[13px] hover:bg-blue-700"
-                  >
-                    {actionLoading ? "Creating..." : "Save Professional"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal 3: Edit Professional */}
-        {showEditModal && selectedProf && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[500px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[20px] font-bold text-headingColor border-b pb-2">
-                Edit Professional
-              </h3>
-
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
-                </div>
-              )}
-
-              <form onSubmit={handleEditSubmit} className="space-y-3 text-[14px]">
-                <div>
-                  <label className="block font-semibold mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Specialization</label>
-                  <select
-                    value={formData.specialization}
-                    onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="Electrician">Electrician</option>
-                    <option value="Plumber">Plumber</option>
-                    <option value="Carpenter">Carpenter</option>
-                    <option value="Driver">Driver</option>
-                    <option value="Painter">Painter</option>
-                    <option value="House Cleaning">House Cleaning</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Ticket Price (₹ INR)</label>
-                  <input
-                    type="number"
-                    value={formData.ticketPrice}
-                    onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Photo Image URL</label>
-                  <input
-                    type="text"
-                    value={formData.photo}
-                    onChange={(e) => setFormData({ ...formData, photo: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Bio</label>
-                  <textarea
-                    rows={2}
-                    value={formData.bio}
-                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                    className="w-full p-2 border rounded-md"
-                  ></textarea>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-3 border-t">
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={actionLoading}
-                    className="px-5 py-2 bg-primaryColor text-white font-semibold rounded-md text-[13px] hover:bg-blue-700"
-                  >
-                    {actionLoading ? "Updating..." : "Update Changes"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal 4: Toggle Status Confirmation */}
-        {showStatusModal && selectedProf && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[450px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[18px] font-bold text-headingColor">
-                Confirm Status Change
-              </h3>
-              <p className="text-[14px] text-textColor">
-                Are you sure you want to{" "}
-                <strong className="text-headingColor">
-                  {selectedProf.isActive !== false ? "deactivate" : "activate"}
-                </strong>{" "}
-                the account for <strong className="text-headingColor">{selectedProf.name}</strong>?
-              </p>
-
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button
-                  disabled={actionLoading}
-                  onClick={() => setShowStatusModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={handleToggleStatus}
-                  className={`px-4 py-2 text-white font-semibold rounded-md text-[13px] ${
-                    selectedProf.isActive !== false ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"
-                  }`}
-                >
-                  {actionLoading ? "Updating..." : "Confirm"}
-                </button>
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Base Price (INR)</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={formData.ticketPrice}
+                  onChange={(e) => setFormData({ ...formData, ticketPrice: Number(e.target.value) })}
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Modal 5: Delete Confirmation */}
-        {showDeleteModal && selectedProf && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[450px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[18px] font-bold text-red-600">
-                Confirm Deletion
-              </h3>
-              <p className="text-[14px] text-textColor">
-                Are you sure you want to delete professional <strong className="text-headingColor">{selectedProf.name}</strong>?
-              </p>
+            <div>
+              <label className="block font-semibold text-[#111111] mb-1">Temporary Password</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Defaults to FixUpPass123! if blank"
+                className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+              />
+            </div>
 
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
-                </div>
-              )}
+            <div>
+              <label className="block font-semibold text-[#111111] mb-1">Bio Tagline</label>
+              <input
+                type="text"
+                maxLength={50}
+                value={formData.bio}
+                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                placeholder="Certified expert with residential experience"
+                className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+              />
+            </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button
-                  disabled={actionLoading}
-                  onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={handleDeleteProfessional}
-                  className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md text-[13px] hover:bg-red-700"
-                >
-                  {actionLoading ? "Deleting..." : "Permanently Delete"}
-                </button>
+            <div className="pt-3 border-t border-[#E5E5E5] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 border border-[#E5E5E5] rounded-lg text-[#525252] hover:bg-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="px-4 py-2 bg-[#111111] hover:bg-black text-white font-semibold rounded-lg flex items-center gap-2"
+              >
+                {actionLoading && (
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                <span>Save Professional</span>
+              </button>
+            </div>
+          </form>
+        </DetailModal>
+
+        {/* Edit Professional Modal */}
+        <DetailModal
+          isOpen={Boolean(profToEdit)}
+          onClose={() => setProfToEdit(null)}
+          title={`Edit ${profToEdit?.name || "Professional"}`}
+          subtitle="Update service fee and trade details"
+        >
+          <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
               </div>
             </div>
-          </div>
-        )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Specialization</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.specialization}
+                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1">Base Price (INR)</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={formData.ticketPrice}
+                  onChange={(e) => setFormData({ ...formData, ticketPrice: Number(e.target.value) })}
+                  className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[#111111] mb-1">Bio Tagline</label>
+              <input
+                type="text"
+                maxLength={50}
+                value={formData.bio}
+                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                className="w-full px-3 py-1.5 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg text-[#111111] focus:bg-white focus:outline-none focus:border-[#111111]"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-[#E5E5E5] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setProfToEdit(null)}
+                className="px-4 py-2 border border-[#E5E5E5] rounded-lg text-[#525252] hover:bg-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="px-4 py-2 bg-[#111111] hover:bg-black text-white font-semibold rounded-lg flex items-center gap-2"
+              >
+                {actionLoading && (
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                <span>Update Details</span>
+              </button>
+            </div>
+          </form>
+        </DetailModal>
+
+        {/* Toggle Active Status Modal */}
+        <ConfirmModal
+          isOpen={Boolean(profToToggle)}
+          title={profToToggle?.isActive === false ? "Activate Professional" : "Deactivate Professional"}
+          message={`Are you sure you want to ${
+            profToToggle?.isActive === false ? "activate" : "deactivate"
+          } ${profToToggle?.name || "this professional"}? ${
+            profToToggle?.isActive === false
+              ? "The professional will become visible in the directory if approved."
+              : "The professional will be hidden from public searches."
+          }`}
+          confirmLabel={profToToggle?.isActive === false ? "Activate" : "Deactivate"}
+          isDanger={profToToggle?.isActive !== false}
+          loading={actionLoading}
+          onConfirm={handleToggleStatus}
+          onCancel={() => setProfToToggle(null)}
+        />
+
+        {/* Delete Safeguard Modal */}
+        <ConfirmModal
+          isOpen={Boolean(profToDelete)}
+          title="Delete Professional"
+          message={`Are you sure you want to delete ${profToDelete?.name || "this professional"}? Note: Deletion will be rejected by the server if existing customer bookings reference this account.`}
+          confirmLabel="Delete Professional"
+          isDanger={true}
+          loading={actionLoading}
+          onConfirm={handleDeleteProfessional}
+          onCancel={() => setProfToDelete(null)}
+        />
       </div>
-    </section>
+    </AdminLayout>
   );
 };
 

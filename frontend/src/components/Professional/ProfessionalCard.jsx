@@ -1,50 +1,116 @@
 import React from 'react';
-import starIcon from '../../assets/images/Star.png';
-import {Link } from "react-router-dom";
-import { BsArrowRight } from "react-icons/bs";
+import { Link } from "react-router-dom";
+import { FiMapPin, FiStar } from "react-icons/fi";
+import avatarImg from '../../assets/images/avatar-img.png';
+import electricianImg from '../../assets/images/electrician-img.jpg';
+import plumberImg from '../../assets/images/plumber-img.jpg';
+import painterImg from '../../assets/images/painter-img.jpg';
+import homeCleanImg from '../../assets/images/homeClean-img.jpg';
 
-const ProfessionalCard = ({professional}) => {
-  const {name, avgRating, averageRating, totalRating, photo, specialization, totalCustomers, organization}= professional || {};
-  const ratingDisplay = avgRating || averageRating || 4.8;
-  const ratingCount = totalRating || 0;
+const tradeFallbacks = [electricianImg, plumberImg, painterImg, homeCleanImg];
+
+const ProfessionalCard = ({ professional, index = 0 }) => {
+  const {
+    _id,
+    id,
+    name,
+    avgRating,
+    averageRating,
+    totalRating,
+    photo,
+    specialization,
+    services,
+    ticketPrice,
+    city,
+    location,
+  } = professional || {};
+
+  const profId = _id || id;
+  const ratingValue = averageRating !== undefined && averageRating !== null && averageRating > 0
+    ? averageRating
+    : avgRating && avgRating > 0
+    ? avgRating
+    : 4.8;
+  const ratingCount = totalRating && totalRating > 0 ? totalRating : 80 + (index * 12);
+
+  const fallbackPhoto = tradeFallbacks[index % tradeFallbacks.length];
+  const displayPhoto = photo && (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:image'))
+    ? photo
+    : fallbackPhoto;
+
+  const displaySpecialization =
+    specialization ||
+    (Array.isArray(services) && services.length > 0 && services[0]?.name ? services[0].name : null) ||
+    (index === 0 ? "Electrical Services" : index === 1 ? "Plumbing Services" : index === 2 ? "Painting Services" : "Cleaning Services");
+  const displayLocation = location || city || "Pune";
+
   return (
-    <div className='p-3 lg:p-5'>
+    <div className="bg-white rounded-3xl border border-[#EAE7E3] p-4 sm:p-5 shadow-soft hover:shadow-card transition-all duration-200 flex flex-col justify-between group">
       <div>
-        <img src={photo} className='w-full h-[400px] rounded-[20px]' alt="" />
-      </div>
-      <h2 className='text-[18px] leading-[30px] lg:text-[26px] lg:leading-9 text-headingColor font-[700] mt-3 lg:mt-5'>
-        {name}
-      </h2>
-      <div className='mt-2 lg:mt-4 flex items-center justify-between'>
-        <span className='bg-[#CCF0F3] text-irisBlueColor py-1 px-2 lg:py-2 lg:px-6 text-[12px] leading-4
-        lg:text-[16px] lg:leading-7 font-semibold rounded'>
-          {specialization}
-        </span>
-        <div className='flex items-center gap-[6px]'>
-          <span className='flex items-center gap-[6px] text-[14px] leading-6 lg:text-[16px] lg:leading-7 font-semibold text-headingColor'>
-            <img src={starIcon} alt="" /> {ratingDisplay}
-          </span>
-          <span className='text-[14px] leading-6 lg:text-[16px] lg:leading-7 font-[400] text-textColor'>
-            ({ratingCount})
-          </span>
+        {/* Rectangular Image with Floating Rating Badge */}
+        <div className="w-full h-48 sm:h-52 rounded-2xl overflow-hidden bg-gray-100 relative">
+          <img
+            src={displayPhoto}
+            alt={name ? `${name} - ${displaySpecialization} Professional` : "FixUp Home Service Professional"}
+            width={400}
+            height={300}
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = fallbackPhoto || avatarImg;
+            }}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+
+          {/* Floating Rating Badge */}
+          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-full shadow-soft flex items-center gap-1 border border-[#EAE7E3]/60">
+            <FiStar className="w-3 h-3 text-amber-500 fill-amber-500" />
+            <span className="text-[11px] font-bold text-[#202124]">
+              {Number(ratingValue).toFixed(1)}
+            </span>
+            <span className="text-[10px] text-[#6B7280]">
+              ({ratingCount})
+            </span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="mt-4">
+          <h4 className="font-heading font-bold text-[#202124] text-base group-hover:text-[#AD7B5D] transition-colors truncate">
+            {name || "Verified Professional"}
+          </h4>
+
+          <p className="text-xs text-[#6B7280] mt-0.5">
+            {displaySpecialization}
+          </p>
+
+          <div className="flex items-center gap-1 text-[11px] text-[#6B7280] mt-2">
+            <FiMapPin className="w-3 h-3 text-[#AD7B5D] shrink-0" />
+            <span>{displayLocation}</span>
+          </div>
         </div>
       </div>
-      <div className='mt-[18px] lg:mt-5 flex items-center justify-between'>
-        <div>
-      <h3 className='text-[16px] leading-7 lg:text-[18px] lg:leading-[30px] font-semibold text-headingColor'>
-        +{totalCustomers} customers
-      </h3>
-      <p className='text-[14px] leading-6 font-[400] '>
-        At {organization}
-      </p>
-    </div>
-    <Link to={`/professionals/${professional._id || professional.id || '01'}`} className="w-[44px] h-[44px] rounded-full border border-solid border-[#181A1E] mt-[30px] mx-auto
-                flex items-center justify-center group hover:bg-primaryColor hover:border-none">
-                  <BsArrowRight className ="group-hover:text-white w-6 h-5"/>
-                </Link>
-    </div>
-    </div>
-  )
-}
 
-export default ProfessionalCard
+      {/* Price & View Details Action */}
+      <div className="mt-5 pt-3.5 border-t border-[#EAE7E3] flex items-center justify-between">
+        <div className="text-xs text-[#6B7280]">
+          <span className="font-heading font-bold text-sm text-[#202124]">
+            ₹{ticketPrice || 500}
+          </span>
+          <span className="text-[11px] text-[#6B7280] font-normal ml-1">
+            / visit
+          </span>
+        </div>
+
+        <Link
+          to={`/professionals/${profId}`}
+          className="bg-[#AD7B5D] hover:bg-[#8F6248] text-white text-xs font-semibold px-4 py-2 rounded-full shadow-soft transition-colors"
+        >
+          View details
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default ProfessionalCard;

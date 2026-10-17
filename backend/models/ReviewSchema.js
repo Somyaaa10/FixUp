@@ -10,6 +10,10 @@ const reviewSchema = new mongoose.Schema(
       type: mongoose.Types.ObjectId,
       ref: "User",
     },
+    booking: {
+      type: mongoose.Types.ObjectId,
+      ref: "Booking",
+    },
     reviewText: {
       type: String,
       required: true,
@@ -17,12 +21,15 @@ const reviewSchema = new mongoose.Schema(
     rating: {
       type: Number,
       required: true,
-      min: 0,
+      min: 1,
       max: 5,
-      default: 0,
+      default: 5,
     },
   },
   { timestamps: true }
 );
+
+// Prevent duplicate reviews for the same booking while keeping backward compatibility
+reviewSchema.index({ booking: 1 }, { unique: true, sparse: true });
 
 export default mongoose.models.Review || mongoose.model("Review", reviewSchema);

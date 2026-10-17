@@ -11,9 +11,13 @@ export const getAdminDashboardStats = async (req, res) => {
     const [
       totalUsers,
       totalProfessionals,
+      pendingProfessionals,
+      approvedProfessionals,
       totalBookings,
       pendingBookings,
       approvedBookings,
+      inProgressBookings,
+      completedBookings,
       cancelledBookings,
       totalServices,
       activeServices,
@@ -22,9 +26,13 @@ export const getAdminDashboardStats = async (req, res) => {
     ] = await Promise.all([
       User.countDocuments({ role: { $ne: "admin" } }),
       Profession.countDocuments({}),
+      Profession.countDocuments({ isApproved: "pending" }),
+      Profession.countDocuments({ isApproved: "approved" }),
       Booking.countDocuments({}),
       Booking.countDocuments({ status: "pending" }),
       Booking.countDocuments({ status: "approved" }),
+      Booking.countDocuments({ status: "in_progress" }),
+      Booking.countDocuments({ status: "completed" }),
       Booking.countDocuments({ status: "cancelled" }),
       Service.countDocuments({}),
       Service.countDocuments({ isActive: true }),
@@ -47,11 +55,15 @@ export const getAdminDashboardStats = async (req, res) => {
         },
         professionals: {
           total: totalProfessionals,
+          pending: pendingProfessionals,
+          approved: approvedProfessionals,
         },
         bookings: {
           total: totalBookings,
           pending: pendingBookings,
           approved: approvedBookings,
+          inProgress: inProgressBookings,
+          completed: completedBookings,
           cancelled: cancelledBookings,
         },
         services: {
@@ -379,6 +391,10 @@ export const getAdminProfessionals = async (req, res) => {
       query.isActive = { $ne: false };
     } else if (status === "inactive") {
       query.isActive = false;
+    } else if (status === "pending") {
+      query.isApproved = "pending";
+    } else if (status === "approved") {
+      query.isApproved = "approved";
     }
 
     if (search.trim()) {
@@ -394,6 +410,7 @@ export const getAdminProfessionals = async (req, res) => {
 
     const [professionals, total] = await Promise.all([
       Profession.find(query)
+        .populate("services", "name desc bgColor textColor isActive")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -443,11 +460,12 @@ export const getAdminProfessionalById = async (req, res) => {
       });
     }
 
-    const [totalBookings, approvedBookings, pendingBookings, cancelledBookings] =
+    const [totalBookings, approvedBookings, pendingBookings, completedBookings, cancelledBookings] =
       await Promise.all([
         Booking.countDocuments({ professional: id }),
         Booking.countDocuments({ professional: id, status: "approved" }),
         Booking.countDocuments({ professional: id, status: "pending" }),
+        Booking.countDocuments({ professional: id, status: "completed" }),
         Booking.countDocuments({ professional: id, status: "cancelled" }),
       ]);
 
@@ -459,6 +477,7 @@ export const getAdminProfessionalById = async (req, res) => {
           totalBookings,
           approvedBookings,
           pendingBookings,
+          completedBookings,
           cancelledBookings,
         },
       },
@@ -527,6 +546,7 @@ export const createProfessionalByAdmin = async (req, res) => {
       experiences: experiences || [],
       role: "professional",
       isActive: true,
+      isApproved: req.body.isApproved || "approved",
     });
 
     await newProfessional.save();
@@ -607,10 +627,10 @@ export const updateProfessionalByAdmin = async (req, res) => {
   }
 };
 
-// PATCH /api/v1/admin/professionals/:id/status - Update active status
+// PATCH /api/v1/admin/professionals/:id/status - Update active or approval status
 export const updateProfessionalStatusByAdmin = async (req, res) => {
   const { id } = req.params;
-  const { isActive } = req.body;
+  const { isActive, isApproved } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
@@ -619,10 +639,24 @@ export const updateProfessionalStatusByAdmin = async (req, res) => {
     });
   }
 
-  if (typeof isActive !== "boolean") {
+  if (isActive === undefined && isApproved === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: "At least one of isActive or isApproved must be provided",
+    });
+  }
+
+  if (isActive !== undefined && typeof isActive !== "boolean") {
     return res.status(400).json({
       success: false,
       message: "isActive property must be a boolean",
+    });
+  }
+
+  if (isApproved !== undefined && !["pending", "approved", "cancelled"].includes(isApproved)) {
+    return res.status(400).json({
+      success: false,
+      message: "isApproved must be one of: pending, approved, cancelled",
     });
   }
 
@@ -636,14 +670,15 @@ export const updateProfessionalStatusByAdmin = async (req, res) => {
       });
     }
 
-    professional.isActive = isActive;
+    if (isActive !== undefined) professional.isActive = isActive;
+    if (isApproved !== undefined) professional.isApproved = isApproved;
     await professional.save();
 
     const { password, ...updatedData } = professional._doc;
 
     res.status(200).json({
       success: true,
-      message: `Professional status updated to ${isActive ? "active" : "inactive"} successfully`,
+      message: "Professional status updated successfully",
       data: updatedData,
     });
   } catch (err) {
@@ -909,4 +944,314 @@ export const updateBookingStatusByAdmin = async (req, res) => {
     });
   }
 };
+
+// ========================================================
+// SERVICE MANAGEMENT (PHASE 4)
+// ========================================================
+
+// GET /api/v1/admin/services - List services with pagination, search, & status filter
+export const getAdminServices = async (req, res) => {
+  try {
+    let { page = 1, limit = 10, search = "", status = "" } = req.query;
+
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    if (limit > 50) limit = 50;
+
+    const query = {};
+
+    if (status === "active") {
+      query.isActive = { $ne: false };
+    } else if (status === "inactive") {
+      query.isActive = false;
+    }
+
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), "i");
+      query.$or = [{ name: searchRegex }, { desc: searchRegex }];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [services, total] = await Promise.all([
+      Service.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Service.countDocuments(query),
+    ]);
+
+    // Attach usage count for each service
+    const servicesWithCounts = await Promise.all(
+      services.map(async (service) => {
+        const bookingCount = await Booking.countDocuments({ service: service._id });
+        return {
+          ...service._doc,
+          bookingCount,
+        };
+      })
+    );
+
+    const pages = Math.ceil(total / limit) || 1;
+
+    res.status(200).json({
+      success: true,
+      data: servicesWithCounts,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages,
+      },
+    });
+  } catch (err) {
+    console.error("Get admin services error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch services",
+    });
+  }
+};
+
+// GET /api/v1/admin/services/:id - Get single service with booking count
+export const getAdminServiceById = async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Service ID format",
+    });
+  }
+
+  try {
+    const service = await Service.findById(id);
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    const bookingCount = await Booking.countDocuments({ service: id });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...service._doc,
+        bookingCount,
+      },
+    });
+  } catch (err) {
+    console.error("Get service by ID error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch service details",
+    });
+  }
+};
+
+// POST /api/v1/admin/services - Create a new service
+export const createServiceByAdmin = async (req, res) => {
+  const { name, desc, bgColor, textColor, isActive } = req.body || {};
+
+  if (!name || typeof name !== "string" || name.trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: "Service name is required (minimum 2 characters)",
+    });
+  }
+
+  try {
+    // Check name uniqueness (case-insensitive)
+    const existing = await Service.findOne({
+      name: { $regex: `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: `A service named '${name.trim()}' already exists`,
+      });
+    }
+
+    const newService = new Service({
+      name: name.trim(),
+      desc: typeof desc === "string" ? desc.trim() : "",
+      bgColor: bgColor || "rgba(254, 182, 13, .2)",
+      textColor: textColor || "#FEB60D",
+      isActive: isActive !== undefined ? Boolean(isActive) : true,
+    });
+
+    await newService.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Service created successfully",
+      data: newService,
+    });
+  } catch (err) {
+    console.error("Create service error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || "Failed to create service",
+    });
+  }
+};
+
+// PATCH /api/v1/admin/services/:id - Update service details
+export const updateServiceByAdmin = async (req, res) => {
+  const { id } = req.params;
+  const { name, desc, bgColor, textColor, isActive } = req.body || {};
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Service ID format",
+    });
+  }
+
+  try {
+    const service = await Service.findById(id);
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Service name must be at least 2 characters",
+        });
+      }
+
+      // Check duplicate name on other services
+      const duplicate = await Service.findOne({
+        _id: { $ne: id },
+        name: { $regex: `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+      });
+
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: `A service named '${name.trim()}' already exists`,
+        });
+      }
+
+      service.name = name.trim();
+    }
+
+    if (desc !== undefined) service.desc = typeof desc === "string" ? desc.trim() : "";
+    if (bgColor !== undefined) service.bgColor = bgColor;
+    if (textColor !== undefined) service.textColor = textColor;
+    if (isActive !== undefined) service.isActive = Boolean(isActive);
+
+    await service.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Service updated successfully",
+      data: service,
+    });
+  } catch (err) {
+    console.error("Update service error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update service",
+    });
+  }
+};
+
+// PATCH /api/v1/admin/services/:id/status - Toggle service active status
+export const updateServiceStatusByAdmin = async (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body || {};
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Service ID format",
+    });
+  }
+
+  if (typeof isActive !== "boolean") {
+    return res.status(400).json({
+      success: false,
+      message: "isActive property must be a boolean",
+    });
+  }
+
+  try {
+    const service = await Service.findById(id);
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    service.isActive = isActive;
+    await service.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Service status updated to ${isActive ? "active" : "inactive"} successfully`,
+      data: service,
+    });
+  } catch (err) {
+    console.error("Update service status error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update service status",
+    });
+  }
+};
+
+// DELETE /api/v1/admin/services/:id - Delete or safely deactivate service
+export const deleteServiceByAdmin = async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Service ID format",
+    });
+  }
+
+  try {
+    const service = await Service.findById(id);
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    // Safety guard: Check if existing bookings reference this service
+    const bookingCount = await Booking.countDocuments({ service: id });
+
+    if (bookingCount > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot delete service referenced by ${bookingCount} existing booking(s). Please deactivate the service instead to preserve historical customer records.`,
+        bookingCount,
+      });
+    }
+
+    await Service.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Service deleted successfully",
+    });
+  } catch (err) {
+    console.error("Delete service error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete service",
+    });
+  }
+};
+
 

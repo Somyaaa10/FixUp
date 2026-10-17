@@ -1,6 +1,41 @@
 import React, { useContext, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
+import { BASE_URL } from "../../config";
+import AdminLayout from "./AdminLayout";
+import StatusBadge from "../../components/Dashboard/StatusBadge";
+import SearchToolbar from "../../components/Dashboard/SearchToolbar";
+import Pagination from "../../components/Dashboard/Pagination";
+import EmptyState from "../../components/Dashboard/EmptyState";
+import ErrorState from "../../components/Dashboard/ErrorState";
+import LoadingSkeleton from "../../components/Dashboard/LoadingSkeleton";
+import ConfirmModal from "../../components/Dashboard/ConfirmModal";
+import DetailModal from "../../components/Dashboard/DetailModal";
+import userImg from "../../assets/images/avatar-img.png";
+import {
+  FiUsers,
+  FiEye,
+  FiTrash2,
+  FiToggleLeft,
+  FiToggleRight,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiX,
+  FiMail,
+  FiPhone,
+  FiCalendar,
+  FiShield,
+} from "react-icons/fi";
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "N/A";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
 const AdminUsers = () => {
   const { user: currentUser, token } = useContext(AuthContext);
@@ -17,19 +52,22 @@ const AdminUsers = () => {
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState(null);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToToggle, setUserToToggle] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState("");
+  const [toastMessage, setToastMessage] = useState({ type: "", text: "" });
+
+  const showToast = (type, text) => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage({ type: "", text: "" }), 4000);
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
     const headers = { Authorization: `Bearer ${token}` };
 
-    let url = `${baseUrl}/api/v1/admin/users?page=${page}&limit=10`;
+    let url = `${BASE_URL}/api/v1/admin/users?page=${page}&limit=10`;
     if (search.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
     if (statusFilter) url += `&status=${statusFilter}`;
 
@@ -43,10 +81,10 @@ const AdminUsers = () => {
 
       setUsers(data.data || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 1 });
-      setLoading(false);
     } catch (err) {
       console.error("Fetch users error:", err);
-      setError("Unable to load users. Please try again.");
+      setError(err.message || "Unable to load users. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -57,21 +95,13 @@ const AdminUsers = () => {
     }
   }, [token, page, statusFilter]);
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setPage(1);
-    fetchUsers();
-  };
-
   const handleToggleStatus = async () => {
-    if (!selectedUser) return;
+    if (!userToToggle) return;
     setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
-    const newStatus = selectedUser.isActive === false ? true : false;
+    const newStatus = userToToggle.isActive === false ? true : false;
 
     try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/users/${selectedUser._id}/status`, {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/users/${userToToggle._id}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -85,24 +115,25 @@ const AdminUsers = () => {
         throw new Error(data.message || "Failed to update user status");
       }
 
-      setShowStatusModal(false);
-      setSelectedUser(null);
+      showToast(
+        "success",
+        `User ${userToToggle.name} ${newStatus ? "activated" : "deactivated"} successfully`
+      );
+      setUserToToggle(null);
       fetchUsers();
     } catch (err) {
-      setActionFeedback(err.message || "Error updating user status");
+      showToast("error", err.message || "Error updating user status");
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+    if (!userToDelete) return;
     setActionLoading(true);
-    setActionFeedback("");
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8001";
 
     try {
-      const res = await fetch(`${baseUrl}/api/v1/admin/users/${selectedUser._id}`, {
+      const res = await fetch(`${BASE_URL}/api/v1/admin/users/${userToDelete._id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -114,206 +145,196 @@ const AdminUsers = () => {
         throw new Error(data.message || "Failed to delete user");
       }
 
-      setShowDeleteModal(false);
-      setSelectedUser(null);
+      showToast("success", `User ${userToDelete.name} has been deleted`);
+      setUserToDelete(null);
       fetchUsers();
     } catch (err) {
-      setActionFeedback(err.message || "Error deleting user");
+      showToast("error", err.message || "Failed to delete user");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "N/A";
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   return (
-    <section className="px-5 xl:px-0 py-10 bg-gray-50 min-h-screen">
-      <div className="max-w-[1170px] mx-auto space-y-6">
-        {/* Navigation Tabs Header */}
-        <div className="flex items-center gap-4 border-b pb-4">
-          <Link
-            to="/admin"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
+    <AdminLayout
+      title="User Management"
+      subtitle="Manage registered customer accounts, authentication status, and access permissions"
+    >
+      <div className="space-y-6">
+        {/* Toast */}
+        {toastMessage.text && (
+          <div
+            className={`p-4 rounded-xl border flex items-center justify-between text-xs sm:text-sm font-medium ${
+              toastMessage.type === "success"
+                ? "bg-white border-[#16A34A]/40 text-[#16A34A] shadow-xs"
+                : "bg-white border-[#DC2626]/40 text-[#DC2626] shadow-xs"
+            }`}
           >
-            Dashboard Overview
-          </Link>
-          <Link
-            to="/admin/users"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-white bg-primaryColor shadow-sm"
-          >
-            User Management
-          </Link>
-          <Link
-            to="/admin/professionals"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
-          >
-            Professional Management
-          </Link>
-          <Link
-            to="/admin/bookings"
-            className="py-2 px-5 rounded-md font-semibold text-[15px] text-textColor hover:text-headingColor bg-white border"
-          >
-            Booking Management
-          </Link>
-        </div>
-
-
-        {/* Page Header */}
-        <div>
-          <h1 className="text-[28px] leading-9 font-bold text-headingColor">
-            User Management
-          </h1>
-          <p className="text-textColor text-[15px] mt-1">
-            Manage registered customer accounts, view profile details, toggle active access, or delete users.
-          </p>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 flex-1">
-            <input
-              type="text"
-              placeholder="Search by name or email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full max-w-[400px] px-4 py-2 border rounded-md focus:outline-none focus:border-primaryColor text-[14px]"
-            />
+            <div className="flex items-center gap-2">
+              {toastMessage.type === "success" ? (
+                <FiCheckCircle className="w-4 h-4 text-[#16A34A]" />
+              ) : (
+                <FiAlertCircle className="w-4 h-4 text-[#DC2626]" />
+              )}
+              <span>{toastMessage.text}</span>
+            </div>
             <button
-              type="submit"
-              className="bg-primaryColor text-white px-4 py-2 rounded-md font-semibold text-[14px] hover:bg-blue-700"
+              onClick={() => setToastMessage({ type: "", text: "" })}
+              className="p-1 hover:opacity-75"
             >
-              Search
+              <FiX className="w-4 h-4" />
             </button>
-          </form>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[14px] text-textColor font-medium">Status:</span>
-            <button
-              onClick={() => { setStatusFilter(""); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "" ? "bg-primaryColor text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => { setStatusFilter("active"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "active" ? "bg-green-600 text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => { setStatusFilter("inactive"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-bold ${
-                statusFilter === "inactive" ? "bg-red-600 text-white" : "bg-gray-100 text-textColor hover:bg-gray-200"
-              }`}
-            >
-              Inactive
-            </button>
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="p-10 text-center bg-white rounded-xl shadow-sm border">
-            <p className="text-[16px] font-semibold text-primaryColor animate-pulse">
-              Loading users...
-            </p>
           </div>
         )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <div className="p-6 bg-red-50 text-red-700 rounded-xl border border-red-200 text-center font-semibold">
-            {error}
-          </div>
+        {/* Search & Filter Toolbar */}
+        <SearchToolbar
+          search={search}
+          onSearchChange={setSearch}
+          onSearchSubmit={() => {
+            setPage(1);
+            fetchUsers();
+          }}
+          placeholder="Search by name or email address..."
+          filters={[
+            { label: "All Users", value: "" },
+            { label: "Active", value: "active" },
+            { label: "Inactive", value: "inactive" },
+          ]}
+          activeFilter={statusFilter}
+          onFilterChange={(val) => {
+            setStatusFilter(val);
+            setPage(1);
+          }}
+        />
+
+        {loading && <LoadingSkeleton type="table" count={5} />}
+
+        {!loading && error && (
+          <ErrorState title="Failed to retrieve users" message={error} onRetry={fetchUsers} />
         )}
 
-        {/* User Table */}
-        {!loading && !error && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {users.length === 0 ? (
-              <div className="p-10 text-center text-textColor font-semibold">
-                No users found.
-              </div>
-            ) : (
+        {!loading && !error && users.length === 0 && (
+          <EmptyState
+            icon={FiUsers}
+            title="No users found"
+            description={
+              search
+                ? `No user records matching "${search}".`
+                : statusFilter
+                ? `No users matching the "${statusFilter}" status filter.`
+                : "No customer accounts registered yet."
+            }
+            actionLabel={search || statusFilter ? "Reset Filters" : null}
+            onAction={() => {
+              setSearch("");
+              setStatusFilter("");
+              setPage(1);
+            }}
+          />
+        )}
+
+        {!loading && !error && users.length > 0 && (
+          <div className="space-y-4">
+            <div className="bg-white border border-[#E5E5E5] rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[14px]">
-                  <thead className="bg-gray-50 text-textColor text-[12px] uppercase font-bold border-b">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#F5F5F5] text-[#525252] font-semibold border-b border-[#E5E5E5] uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="p-4">Name</th>
-                      <th className="p-4">Email</th>
-                      <th className="p-4">Role</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Joined</th>
-                      <th className="p-4 text-right">Actions</th>
+                      <th className="py-3 px-4">Customer Details</th>
+                      <th className="py-3 px-4">Contact Phone</th>
+                      <th className="py-3 px-4">Gender</th>
+                      <th className="py-3 px-4">Registered On</th>
+                      <th className="py-3 px-4">Account Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-[#E5E5E5]">
                     {users.map((u) => {
                       const isSelf = currentUser?._id === u._id;
-                      const isActive = u.isActive !== false;
+                      const active = u.isActive !== false;
 
                       return (
-                        <tr key={u._id} className="hover:bg-gray-50">
-                          <td className="p-4 font-semibold text-headingColor">{u.name}</td>
-                          <td className="p-4 text-textColor">{u.email}</td>
-                          <td className="p-4">
-                            <span className="capitalize px-2.5 py-0.5 rounded text-[12px] font-bold bg-gray-100 text-headingColor">
-                              {u.role || "customer"}
-                            </span>
+                        <tr key={u._id} className="hover:bg-[#F5F5F5] transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={u.photo || userImg}
+                                alt={u.name}
+                                className="w-8 h-8 rounded-full object-cover border border-[#E5E5E5]"
+                                onError={(e) => {
+                                  e.currentTarget.src = userImg;
+                                }}
+                              />
+                              <div className="min-w-0">
+                                <span className="font-bold text-[#111111] block">
+                                  {u.name}
+                                  {isSelf && (
+                                    <span className="ml-2 text-[10px] font-semibold bg-[#111111] text-white px-1.5 py-0.2 rounded">
+                                      You
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[11px] text-[#737373] truncate block">
+                                  {u.email}
+                                </span>
+                              </div>
+                            </div>
                           </td>
-                          <td className="p-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[12px] font-bold ${
-                                isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {isActive ? "Active" : "Inactive"}
-                            </span>
+
+                          <td className="py-3.5 px-4 text-[#111111]">
+                            {u.phone || <span className="text-[#737373]">—</span>}
                           </td>
-                          <td className="p-4 text-textColor">{formatDate(u.createdAt)}</td>
-                          <td className="p-4 text-right space-x-2">
-                            {/* View Button */}
-                            <button
-                              onClick={() => { setSelectedUser(u); setShowViewModal(true); }}
-                              className="px-3 py-1 bg-gray-100 text-headingColor rounded text-[12px] font-semibold hover:bg-gray-200"
-                            >
-                              View
-                            </button>
 
-                            {/* Toggle Status Button */}
-                            {!isSelf ? (
-                              <button
-                                onClick={() => { setSelectedUser(u); setActionFeedback(""); setShowStatusModal(true); }}
-                                className={`px-3 py-1 rounded text-[12px] font-semibold ${
-                                  isActive
-                                    ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                                    : "bg-green-100 text-green-800 hover:bg-green-200"
-                                }`}
-                              >
-                                {isActive ? "Disable" : "Activate"}
-                              </button>
-                            ) : null}
+                          <td className="py-3.5 px-4 capitalize text-[#525252]">
+                            {u.gender || "—"}
+                          </td>
 
-                            {/* Delete Button */}
-                            {!isSelf ? (
+                          <td className="py-3.5 px-4 text-[#111111]">
+                            {formatDate(u.createdAt)}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <StatusBadge type="active" status={active} />
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
                               <button
-                                onClick={() => { setSelectedUser(u); setActionFeedback(""); setShowDeleteModal(true); }}
-                                className="px-3 py-1 bg-red-100 text-red-700 rounded text-[12px] font-semibold hover:bg-red-200"
+                                onClick={() => setSelectedUser(u)}
+                                className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#111111] hover:bg-[#E5E5E5] transition-colors"
+                                title="View User"
+                                aria-label="View User Details"
                               >
-                                Delete
+                                <FiEye className="w-3.5 h-3.5" />
                               </button>
-                            ) : null}
+
+                              {!isSelf && (
+                                <>
+                                  <button
+                                    onClick={() => setUserToToggle(u)}
+                                    className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#111111] hover:bg-[#E5E5E5] transition-colors"
+                                    title={active ? "Deactivate User" : "Activate User"}
+                                    aria-label="Toggle user active status"
+                                  >
+                                    {active ? (
+                                      <FiToggleRight className="w-3.5 h-3.5 text-[#16A34A]" />
+                                    ) : (
+                                      <FiToggleLeft className="w-3.5 h-3.5 text-[#737373]" />
+                                    )}
+                                  </button>
+
+                                  <button
+                                    onClick={() => setUserToDelete(u)}
+                                    className="p-1.5 rounded-lg border border-[#DC2626]/40 text-[#DC2626] hover:bg-[#DC2626]/10 transition-colors"
+                                    title="Delete User"
+                                    aria-label="Delete User"
+                                  >
+                                    <FiTrash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -321,146 +342,114 @@ const AdminUsers = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
 
-            {/* Pagination Controls */}
-            {pagination.pages > 1 && (
-              <div className="p-4 bg-gray-50 border-t flex items-center justify-between">
-                <span className="text-[13px] text-textColor font-medium">
-                  Showing Page {pagination.page} of {pagination.pages} ({pagination.total} Total Users)
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={page <= 1}
-                    onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                    className="px-3 py-1.5 rounded bg-white border text-[13px] font-bold disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-3 text-[13px] font-bold">{page}</span>
-                  <button
-                    disabled={page >= pagination.pages}
-                    onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
-                    className="px-3 py-1.5 rounded bg-white border text-[13px] font-bold disabled:opacity-50"
-                  >
-                    Next
-                  </button>
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.pages}
+              totalItems={pagination.total}
+              limit={pagination.limit}
+              onPageChange={(newPage) => setPage(newPage)}
+            />
+          </div>
+        )}
+
+        {/* View User Modal */}
+        <DetailModal
+          isOpen={Boolean(selectedUser)}
+          onClose={() => setSelectedUser(null)}
+          title={selectedUser?.name || "Customer Account Details"}
+          subtitle={`Account ID: ${selectedUser?._id || ""}`}
+          footer={
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="px-4 py-1.5 bg-[#111111] text-white text-xs font-semibold rounded-lg hover:bg-black transition-colors"
+            >
+              Close
+            </button>
+          }
+        >
+          {selectedUser && (
+            <div className="space-y-4 text-xs">
+              <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl border border-[#E5E5E5]">
+                <img
+                  src={selectedUser.photo || userImg}
+                  alt={selectedUser.name}
+                  className="w-12 h-12 rounded-full object-cover border border-[#E5E5E5]"
+                />
+                <div>
+                  <h4 className="font-bold text-sm text-[#111111]">{selectedUser.name}</h4>
+                  <p className="text-[11px] text-[#737373]">{selectedUser.email}</p>
+                  <div className="mt-1">
+                    <StatusBadge type="active" status={selectedUser.isActive !== false} />
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Modal 1: View User Details */}
-        {showViewModal && selectedUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[500px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[20px] font-bold text-headingColor border-b pb-2">
-                User Details
-              </h3>
-              <div className="space-y-2 text-[14px]">
-                <p><strong>Full Name:</strong> {selectedUser.name}</p>
-                <p><strong>Email Address:</strong> {selectedUser.email}</p>
-                <p><strong>Role:</strong> <span className="capitalize">{selectedUser.role}</span></p>
-                <p><strong>Status:</strong> {selectedUser.isActive !== false ? "Active" : "Inactive"}</p>
-                <p><strong>Gender:</strong> {selectedUser.gender || "Not specified"}</p>
-                <p><strong>Blood Type:</strong> {selectedUser.bloodType || "N/A"}</p>
-                <p><strong>Joined Date:</strong> {formatDate(selectedUser.createdAt)}</p>
-              </div>
-              <div className="pt-4 border-t text-right">
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="px-5 py-2 bg-primaryColor text-white font-semibold rounded-md text-[14px]"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal 2: Toggle Status Confirmation */}
-        {showStatusModal && selectedUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[450px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[18px] font-bold text-headingColor">
-                Confirm Status Change
-              </h3>
-              <p className="text-[14px] text-textColor">
-                Are you sure you want to{" "}
-                <strong className="text-headingColor">
-                  {selectedUser.isActive !== false ? "deactivate" : "activate"}
-                </strong>{" "}
-                the account for <strong className="text-headingColor">{selectedUser.name}</strong>?
-              </p>
-
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[#737373] text-[11px] block">Role</span>
+                  <span className="font-bold text-[#111111] uppercase tracking-wider text-[11px]">
+                    {selectedUser.role || "customer"}
+                  </span>
                 </div>
-              )}
 
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button
-                  disabled={actionLoading}
-                  onClick={() => setShowStatusModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={handleToggleStatus}
-                  className={`px-4 py-2 text-white font-semibold rounded-md text-[13px] ${
-                    selectedUser.isActive !== false ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"
-                  }`}
-                >
-                  {actionLoading ? "Updating..." : "Confirm"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal 3: Delete User Confirmation */}
-        {showDeleteModal && selectedUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-5 z-50">
-            <div className="bg-white rounded-xl max-w-[450px] w-full p-6 space-y-4 shadow-xl border">
-              <h3 className="text-[18px] font-bold text-red-600">
-                Confirm Permanent Deletion
-              </h3>
-              <p className="text-[14px] text-textColor">
-                Are you sure you want to permanently delete user account for{" "}
-                <strong className="text-headingColor">{selectedUser.name}</strong>? This action cannot be undone.
-              </p>
-
-              {actionFeedback && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 font-semibold">
-                  {actionFeedback}
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[#737373] text-[11px] block">Contact Phone</span>
+                  <span className="font-semibold text-[#111111]">
+                    {selectedUser.phone || "Not provided"}
+                  </span>
                 </div>
-              )}
 
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button
-                  disabled={actionLoading}
-                  onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-headingColor font-semibold rounded-md text-[13px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={handleDeleteUser}
-                  className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md text-[13px] hover:bg-red-700"
-                >
-                  {actionLoading ? "Deleting..." : "Permanently Delete"}
-                </button>
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[#737373] text-[11px] block">Gender</span>
+                  <span className="font-semibold text-[#111111] capitalize">
+                    {selectedUser.gender || "Not specified"}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white border border-[#E5E5E5] rounded-lg">
+                  <span className="text-[#737373] text-[11px] block">Joined Date</span>
+                  <span className="font-semibold text-[#111111]">
+                    {formatDate(selectedUser.createdAt)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </DetailModal>
+
+        {/* Toggle Status Confirmation Modal */}
+        <ConfirmModal
+          isOpen={Boolean(userToToggle)}
+          title={userToToggle?.isActive === false ? "Activate User Account" : "Deactivate User Account"}
+          message={`Are you sure you want to ${
+            userToToggle?.isActive === false ? "activate" : "deactivate"
+          } ${userToToggle?.name || "this user"}? ${
+            userToToggle?.isActive === false
+              ? "The customer will regain platform access."
+              : "The customer will be blocked from accessing protected services."
+          }`}
+          confirmLabel={userToToggle?.isActive === false ? "Activate" : "Deactivate"}
+          isDanger={userToToggle?.isActive !== false}
+          loading={actionLoading}
+          onConfirm={handleToggleStatus}
+          onCancel={() => setUserToToggle(null)}
+        />
+
+        {/* Delete User Confirmation Modal */}
+        <ConfirmModal
+          isOpen={Boolean(userToDelete)}
+          title="Delete Customer Account"
+          message={`Are you sure you want to permanently delete account for ${userToDelete?.name || "this user"}? This action cannot be undone.`}
+          confirmLabel="Delete Account"
+          isDanger={true}
+          loading={actionLoading}
+          onConfirm={handleDeleteUser}
+          onCancel={() => setUserToDelete(null)}
+        />
       </div>
-    </section>
+    </AdminLayout>
   );
 };
 
