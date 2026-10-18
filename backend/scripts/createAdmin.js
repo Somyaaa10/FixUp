@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import User from "../models/UserSchema.js";
 
 dotenv.config();
@@ -44,9 +46,14 @@ export const seedAdminIfMissing = async (forceReset = false) => {
 
 const runStandaloneScript = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URL || "mongodb://127.0.0.1:27017/fixup");
+    const mongoUrl =
+      process.env.MONGO_URL ||
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI ||
+      "mongodb://127.0.0.1:27017/fixup";
+    await mongoose.connect(mongoUrl);
     console.log("Connected to MongoDB for admin setup");
-    const forceReset = process.argv.includes("--reset");
+    const forceReset = process.argv ? process.argv.includes("--reset") : false;
     await seedAdminIfMissing(forceReset);
     await mongoose.disconnect();
     console.log("Admin setup finished");
@@ -55,6 +62,17 @@ const runStandaloneScript = async () => {
   }
 };
 
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
+const isDirectRun = Boolean(
+  process.argv?.[1] &&
+    (() => {
+      try {
+        return path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+      } catch {
+        return false;
+      }
+    })()
+);
+
+if (isDirectRun) {
   runStandaloneScript();
 }
