@@ -32,13 +32,15 @@ export const register = async (req, res) => {
 
     let user = null;
 
+    const normalizedGender = gender === "other" ? "others" : gender;
+
     if (role === "customer") {
       user = new User({
         name: name.trim(),
         email: normalizedEmail,
         password: hashPassword,
         photo,
-        gender,
+        gender: normalizedGender,
         role,
       });
     } else if (role === "professional") {
@@ -47,7 +49,7 @@ export const register = async (req, res) => {
         email: normalizedEmail,
         password: hashPassword,
         photo,
-        gender,
+        gender: normalizedGender,
         role,
         isApproved: "pending",
         isActive: true,
@@ -76,6 +78,13 @@ export const register = async (req, res) => {
       .status(200)
       .json({ success: true, message: "Account created successfully" });
   } catch (error) {
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,

@@ -24,28 +24,56 @@ const app = express();
 const port = process.env.PORT || 8001;
 
 // Allowed Origins configuration
-const configuredOrigins = [
+const staticAllowedOrigins = [
+  "https://fixup-frontend-zeta.vercel.app",
+  "https://fixup-frontend-43ppkc3mz-somyaa10s-projects.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const envAllowedOrigins = [
   process.env.CLIENT_SITE_URL,
   process.env.CLIENT_URL,
   process.env.FRONTEND_URL,
-  "http://localhost:5173",
-  "http://localhost:3000",
-].filter(Boolean);
+]
+  .filter(Boolean)
+  .flatMap((url) => [url.trim().replace(/\/+$/, ""), url.trim()]);
 
-const allowedOrigins = Array.from(
-  new Set(configuredOrigins.flatMap((url) => [url.trim().replace(/\/+$/, ""), url.trim()]))
-);
+const allowedOriginsSet = new Set([
+  ...staticAllowedOrigins,
+  ...envAllowedOrigins,
+]);
+
+export const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // Non-browser requests, curl, server-to-server
+  if (allowedOriginsSet.has(origin)) return true;
+  // Match any FixUp frontend Vercel deployment preview / branch URL
+  if (/^https:\/\/fixup-frontend(-[a-z0-9-]+)?\.vercel\.app$/i.test(origin)) {
+    return true;
+  }
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests, allowed origins, or non-production environment
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+    if (!origin || isAllowedOrigin(origin) || process.env.NODE_ENV !== "production") {
       callback(null, true);
     } else {
       callback(new Error("CORS policy violation: origin not allowed"));
     }
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
+  optionsSuccessStatus: 204,
 };
 
 // Database connection logic with caching for serverless environments
@@ -99,6 +127,7 @@ export const connectDB = async () => {
 
 // Middleware
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -140,6 +169,21 @@ app.use("/api/v1/bookings", bookingRoute);
 app.use("/api/v1/services", serviceRoute);
 app.use("/api/v1/admin", adminRoute);
 app.use("/api/v1/contact", contactRoute);
+
+// Global error handling middleware (handles CORS rejections and unhandled errors gracefully)
+app.use((err, req, res, next) => {
+  if (err && err.message && err.message.includes("CORS policy violation")) {
+    return res.status(403).json({
+      success: false,
+      message: err.message,
+    });
+  }
+  console.error("Unhandled error:", err);
+  return res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
+});
 
 // Start server when executed directly as a standalone process
 export const startServer = async () => {
